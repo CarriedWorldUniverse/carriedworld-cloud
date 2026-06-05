@@ -25,11 +25,16 @@ spec:
         - name: vllm
           image: vllm/vllm-openai:nightly
           args:
-            - "--model=google/gemma-4-12B-it-qat-w4a16-ct"  # QAT 4-bit (~7-8GB) → big KV headroom
-            - "--kv-cache-dtype=fp8"             # halve KV → more context on 24GB
-            - "--max-model-len=131072"           # 128K target; vLLM caps to what KV fits
+            # NOTE: W4A16 QAT (gemma-4-12B-it-qat-w4a16-ct) crashes the current
+            # vLLM nightly — "Gemma4UnifiedVisionConfig has no attribute
+            # num_soft_tokens" (days-old upstream bug). Reverted to working FP8.
+            # Revisit W4A16/large-context when upstream fixes it.
+            - "--model=google/gemma-4-12B-it"    # BF16 base loads clean; FP8 below
+            - "--quantization=fp8"               # on-the-fly FP8 (~12GB)
+            - "--kv-cache-dtype=fp8"             # halve KV
+            - "--max-model-len=32768"            # FP8 ceiling on 24GB; fine for short-context lanes
             - "--gpu-memory-utilization=0.92"
-            - "--served-model-name=google/gemma-4-12B-it"   # stable name; quant swaps underneath
+            - "--served-model-name=google/gemma-4-12B-it"   # stable name for consumers
             - "--port=8000"
           env:
             - name: VLLM_FLASH_ATTN_VERSION       # FA3 broken on Blackwell
