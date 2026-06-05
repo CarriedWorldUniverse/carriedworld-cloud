@@ -1,0 +1,58 @@
+# Gemma 4 12B-it QAT Q4_0 (GGUF) served by Ollama on the RTX 5090 (sm_120).
+# THE ACTIVE gemma endpoint (the vLLM FP8 deploy is the scaled-to-0 fallback).
+#
+# Why Ollama + Q4_0: vLLM W4A16 crashed (upstream Gemma4 vision-config bug), and
+# FP8 capped context at 32K. Ollama 0.30.5 ships the cuda_v13/sm_120 backend (NO
+# custom build needed), and the official QAT Q4_0 GGUF (~7GB) + Gemma 4's
+# sliding-window attention (only 8 of 48 layers hold full-context KV) fits the
+# FULL 256K context in ~10.6GB → ~13GB free on the 24GB card. flash-attn + q8_0
+# KV both work on Blackwell here.
+#
+# Endpoint: http://gemma-ollama.nexus.svc.cluster.local:11434 — OpenAI at /v1, native at /api.
+# Model (pull once into the PVC): ollama pull hf.co/google/gemma-4-12B-it-qat-q4_0-gguf
+# NOTE: Gemma 4 is a REASONING model — /v1 returns the answer in `content` AFTER the
+# thinking (exposed as `reasoning`). Use think:false for fast classify lanes (direct
+# content, no wasted tokens); keep thinking + a high max_tokens for research/summaries.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: ollama-models, namespace: nexus }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources: { requests: { storage: 40Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: gemma-ollama, namespace: nexus, labels: { app: gemma-ollama } }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }              # single GPU
+  selector: { matchLabels: { app: gemma-ollama } }
+  template:
+    metadata: { labels: { app: gemma-ollama } }
+    spec:
+      runtimeClassName: nvidia              # required — nvidia runtime is not cluster default
+      containers:
+        - name: ollama
+          image: ollama/ollama:0.30.5        # pinned; ships cuda_v13/sm_120
+          env:
+            - { name: OLLAMA_HOST, value: "0.0.0.0" }
+            - { name: OLLAMA_CONTEXT_LENGTH, value: "262144" }   # full 256K (Q4_0 + sliding-window fits)
+            - { name: OLLAMA_KV_CACHE_TYPE, value: "q8_0" }      # quantized KV — stretches context
+            - { name: OLLAMA_FLASH_ATTENTION, value: "1" }       # works on Blackwell in Ollama's llama.cpp
+            - { name: OLLAMA_NUM_PARALLEL, value: "1" }          # raise for concurrency (×ctx multiplies KV)
+            - { name: OLLAMA_KEEP_ALIVE, value: "30m" }
+          ports: [{ containerPort: 11434, name: http }]
+          resources: { limits: { nvidia.com/gpu: 1 } }
+          volumeMounts: [{ name: models, mountPath: /root/.ollama }]
+      volumes:
+        - name: models
+          persistentVolumeClaim: { claimName: ollama-models }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: gemma-ollama, namespace: nexus }
+spec:
+  selector: { app: gemma-ollama }
+  ports: [{ port: 11434, targetPort: 11434, name: http }]
+  type: ClusterIP
