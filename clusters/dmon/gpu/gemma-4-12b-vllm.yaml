@@ -25,12 +25,11 @@ spec:
         - name: vllm
           image: vllm/vllm-openai:nightly
           args:
-            - "--model=google/gemma-4-12B-it"    # case-sensitive HF repo (capital B)
-            - "--quantization=fp8"               # on-the-fly FP8 from BF16 weights
+            - "--model=google/gemma-4-12B-it-qat-w4a16-ct"  # QAT 4-bit (~7-8GB) → big KV headroom
             - "--kv-cache-dtype=fp8"             # halve KV → more context on 24GB
-            - "--max-model-len=32768"            # conservative; tune up if VRAM allows
+            - "--max-model-len=131072"           # 128K target; vLLM caps to what KV fits
             - "--gpu-memory-utilization=0.92"
-            - "--served-model-name=google/gemma-4-12B-it"
+            - "--served-model-name=google/gemma-4-12B-it"   # stable name; quant swaps underneath
             - "--port=8000"
           env:
             - name: VLLM_FLASH_ATTN_VERSION       # FA3 broken on Blackwell
