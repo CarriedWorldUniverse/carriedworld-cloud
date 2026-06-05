@@ -1,0 +1,13 @@
+# Persistent weight cache for the Gemma vLLM pod (~23GB BF16 download), so it
+# survives pod restarts. hostPath via local-path on dMon's 1.8TB disk.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gemma-weights
+  namespace: nexus
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path        # k3s default provisioner
+  resources:
+    requests:
+      storage: 60Gi

@@ -1,0 +1,70 @@
+# Gemma 4 12B-it served by vLLM on the RTX 5090 (sm_120), FP8.
+# See docs/2026-06-06-gemma-4-12b-install-plan.md. Namespace: nexus.
+#
+# IMAGE NOTE (⚠VERIFY): vllm/vllm-openai:nightly must carry sm_120 kernels AND
+# Gemma 4 (Transformers >= 5.5.4). If it doesn't, build from the cu130 nightly:
+#   FROM nvidia/cuda:13.0.0-runtime-ubuntu24.04
+#   RUN pip install --pre vllm --extra-index-url https://wheels.vllm.ai/nightly/cu130 \
+#       && pip install -U "transformers>=5.5.4"
+# ...and push to localhost (podman build → k3s ctr import), then set image below.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gemma-vllm
+  namespace: nexus
+  labels: { app: gemma-vllm }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }          # single GPU — never two pods contending
+  selector: { matchLabels: { app: gemma-vllm } }
+  template:
+    metadata: { labels: { app: gemma-vllm } }
+    spec:
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:nightly
+          args:
+            - "--model=google/gemma-4-12b-it"
+            - "--quantization=fp8"               # on-the-fly FP8 from BF16 weights
+            - "--kv-cache-dtype=fp8"             # halve KV → more context on 24GB
+            - "--max-model-len=32768"            # conservative; tune up if VRAM allows
+            - "--gpu-memory-utilization=0.92"
+            - "--served-model-name=google/gemma-4-12b-it"
+            - "--port=8000"
+          env:
+            - name: VLLM_FLASH_ATTN_VERSION       # FA3 broken on Blackwell
+              value: "2"
+            - name: HF_TOKEN
+              valueFrom: { secretKeyRef: { name: hf-token, key: token } }
+            - name: HF_HOME
+              value: /hf-cache
+          ports: [{ containerPort: 8000, name: http }]
+          resources:
+            limits: { nvidia.com/gpu: 1 }
+          volumeMounts:
+            - { name: hf-cache, mountPath: /hf-cache }
+            - { name: shm, mountPath: /dev/shm }    # vLLM needs large shared memory
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 90               # first load downloads ~23GB
+            periodSeconds: 15
+            failureThreshold: 40
+          startupProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 20
+            failureThreshold: 60                  # up to ~20 min for first pull+quantize
+      volumes:
+        - name: hf-cache
+          persistentVolumeClaim: { claimName: gemma-weights }
+        - name: shm
+          emptyDir: { medium: Memory, sizeLimit: 8Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gemma-vllm
+  namespace: nexus
+spec:
+  selector: { app: gemma-vllm }
+  ports: [{ port: 8000, targetPort: 8000, name: http }]
+  type: ClusterIP
