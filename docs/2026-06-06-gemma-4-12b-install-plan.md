@@ -10,6 +10,11 @@
 
 **Decisions (brainstorm 2026-06-06):** Gemma 4 12B-it · FP8 (vLLM dynamic) · vLLM · NVIDIA device plugin.
 
+## Execution status
+- **Phase 1 ✅ DONE (2026-06-06).** Executed via **RuntimeClass, not the default-runtime change** — k3s had already auto-added the `nvidia` containerd runtime (config v2, line 51), so **no `config.toml.tmpl` edit and no k3s restart** (CWB stayed up). Created RuntimeClass `nvidia` (handler `nvidia`) + deployed the device plugin patched with `runtimeClassName: nvidia`. `nvidia.com/gpu: 1` allocatable; smoke pod saw the 5090. **Consequence:** every GPU pod must set `runtimeClassName: nvidia` (the vLLM manifest does). The Task-1 default-runtime/restart steps below remain as the *fallback* for a setup lacking the auto-added runtime.
+- **Phase 2 ⏳ blocked on the HF token** (operator accepting the Gemma 4 license + a read token).
+- **Phase 3 ⏳** after Phase 2.
+
 ---
 
 ## Hardware reality (measured on dMon)

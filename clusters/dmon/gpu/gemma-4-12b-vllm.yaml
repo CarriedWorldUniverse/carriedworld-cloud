@@ -20,6 +20,7 @@ spec:
   template:
     metadata: { labels: { app: gemma-vllm } }
     spec:
+      runtimeClassName: nvidia        # nvidia runtime is NOT the cluster default; select it per-pod
       containers:
         - name: vllm
           image: vllm/vllm-openai:nightly
