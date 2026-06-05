@@ -25,18 +25,17 @@ spec:
         - name: vllm
           image: vllm/vllm-openai:nightly
           args:
-            - "--model=google/gemma-4-12b-it"
+            - "--model=google/gemma-4-12B-it"    # case-sensitive HF repo (capital B)
             - "--quantization=fp8"               # on-the-fly FP8 from BF16 weights
             - "--kv-cache-dtype=fp8"             # halve KV → more context on 24GB
             - "--max-model-len=32768"            # conservative; tune up if VRAM allows
             - "--gpu-memory-utilization=0.92"
-            - "--served-model-name=google/gemma-4-12b-it"
+            - "--served-model-name=google/gemma-4-12B-it"
             - "--port=8000"
           env:
             - name: VLLM_FLASH_ATTN_VERSION       # FA3 broken on Blackwell
               value: "2"
-            - name: HF_TOKEN
-              valueFrom: { secretKeyRef: { name: hf-token, key: token } }
+            # No HF_TOKEN — Gemma 4 is Apache 2.0 / ungated, anonymous pull.
             - name: HF_HOME
               value: /hf-cache
           ports: [{ containerPort: 8000, name: http }]
