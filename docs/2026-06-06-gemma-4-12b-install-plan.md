@@ -12,8 +12,8 @@
 
 ## Execution status
 - **Phase 1 ✅ DONE (2026-06-06).** Executed via **RuntimeClass, not the default-runtime change** — k3s had already auto-added the `nvidia` containerd runtime (config v2, line 51), so **no `config.toml.tmpl` edit and no k3s restart** (CWB stayed up). Created RuntimeClass `nvidia` (handler `nvidia`) + deployed the device plugin patched with `runtimeClassName: nvidia`. `nvidia.com/gpu: 1` allocatable; smoke pod saw the 5090. **Consequence:** every GPU pod must set `runtimeClassName: nvidia` (the vLLM manifest does). The Task-1 default-runtime/restart steps below remain as the *fallback* for a setup lacking the auto-added runtime.
-- **Phase 2 ▶ IN PROGRESS (2026-06-06).** **No HF token needed** — Gemma 4 is the first Gemma under **Apache 2.0 / ungated**; vLLM pulls anonymously. Task 4 (HF token secret) is dropped. Repo is `google/gemma-4-12B-it` (**case-sensitive, capital B**). PVC + vLLM Deployment applied; watching the ~23 GB pull → FP8 load.
-- **Phase 3 ⏳** after Phase 2.
+- **Phase 2 ✅ DONE (2026-06-06).** **No HF token** — Gemma 4 is the first Gemma under Apache 2.0 / ungated; vLLM pulled anonymously. Repo is `google/gemma-4-12B-it` (case-sensitive, capital B). Serving on the first deploy: vLLM 0.22.1 nightly, FP8, sm_120; `/v1/chat` returns real completions; endpoint `http://gemma-vllm.nexus.svc.cluster.local:8000/v1`. **VRAM: 22.5/24.4 GB at 0.92 util, 32K context** — FP8 @ 32K is ~the ceiling on the 24 GB card; more context ⇒ NVFP4/W4A16 (weights ~7–8 GB) later. Both ⚠VERIFY risks (image sm_120/Gemma-4 support, FP8 fit) passed.
+- **Phase 3 ⏳** — wire the funnel cheap/fallback lane to the endpoint.
 
 ---
 
