@@ -1,0 +1,17 @@
+name: keel
+namespace: nexus
+kind: Deployment
+strategy: Recreate
+image: localhost/nexus-builder:dev
+command: ["/usr/local/bin/agentfunnel"]
+args: ["-k", "/etc/nexus/keyfile.json", "-context-mode", "global"]
+env:
+  OPENAI_BASE_URL: "http://gemma-ollama.nexus.svc.cluster.local:11434/v1"
+  OPENAI_API_KEY: "ollama"
+  CW_SEAM_URL: "https://nexus.tail41686e.ts.net:7888"
+identity:
+  mode: secret
+  secretName: aspect-keyfile-keel
+  key: keyfile.json
+  mountPath: /etc/nexus
+tailnetEdge: false
