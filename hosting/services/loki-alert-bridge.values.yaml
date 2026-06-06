@@ -1,0 +1,24 @@
+name: loki-alert-bridge
+namespace: nexus
+kind: Deployment
+image: localhost/loki-alert-bridge:dev
+port: 8080
+env:
+  NEXUS_OBSERVER_KEYFILE: "/etc/nexus/keyfile.json"
+  NEXUS_LOKI_URL: "http://loki.logging.svc.cluster.local:3100"
+  NEXUS_LOKI_ALERT_BRIDGE_LISTEN: ":8080"
+  NEXUS_LOKI_ALERT_MENTION: "keel"
+identity:
+  mode: secret
+  secretName: observer-keyfile
+  key: keyfile.json
+  mountPath: /etc/nexus
+tailnetEdge: false
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
