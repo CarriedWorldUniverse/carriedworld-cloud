@@ -13,6 +13,10 @@ metadata:
 {{ include "hosted-service.labels" . | indent 4 }}
 spec:
   replicas: {{ .Values.replicas }}
+  {{- if and (eq $kind "Deployment") .Values.strategy }}
+  strategy:
+    type: {{ .Values.strategy }}
+  {{- end }}
   {{- if eq $kind "StatefulSet" }}
   serviceName: {{ $name }}
   {{- end }}

@@ -4,6 +4,10 @@ namespace: ""
 # Deployment or StatefulSet.
 kind: Deployment
 
+# Deployment update strategy: "" (chart default), RollingUpdate, or Recreate.
+# Use Recreate for single-writer RWO-PVC workloads (e.g. sqld, the broker).
+strategy: ""
+
 image: ""
 command: []
 args: []
