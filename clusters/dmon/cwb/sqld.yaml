@@ -1,0 +1,50 @@
+# sqld (libSQL server) — the CWB platform DATA SERVICE.
+# Lives in `cwb` alongside the other pillars (herald/cairn/ledger/commonplace);
+# ALL consumers (nexus, ledger, commonplace, …) connect as CLIENTS over the
+# libSQL/Hrana protocol at sqld.cwb.svc.cluster.local:8080. Co-located with
+# custodian/herald, which will broker scoped per-service connections (NEX-454).
+#
+# DATA SEED (one-time runtime step, done 2026-06-06 for nexus.db; NOT in the manifest):
+#   1. online consistent snapshot:  sqlite3 nexus.db ".backup /tmp/snap.db"   (no broker stop)
+#   2. scale sqld → 0; swap <pvc>/iku.db/dbs/default/data with the snapshot;
+#      rm data-wal data-shm wallog stats.json (so sqld re-inits the log); chown to match.
+#   3. scale sqld → 1; verify via Hrana /v2/pipeline (SELECT count(*) ...).
+#
+# TODO: pin the image tag (running :latest); add custodian-brokered DSNs (NEX-454).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: sqld-data, namespace: cwb }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources: { requests: { storage: 20Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: sqld, namespace: cwb, labels: { app: sqld } }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }            # single SQLite-backed primary
+  selector: { matchLabels: { app: sqld } }
+  template:
+    metadata: { labels: { app: sqld } }
+    spec:
+      containers:
+        - name: sqld
+          image: ghcr.io/tursodatabase/libsql-server:latest
+          env:
+            - { name: SQLD_NODE, value: "primary" }
+            - { name: SQLD_HTTP_LISTEN_ADDR, value: "0.0.0.0:8080" }
+          ports: [{ containerPort: 8080, name: http }, { containerPort: 5001, name: grpc }]
+          volumeMounts: [{ name: data, mountPath: /var/lib/sqld }]
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: sqld-data }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: sqld, namespace: cwb }
+spec:
+  selector: { app: sqld }
+  ports: [{ port: 8080, targetPort: 8080, name: http }]
+  type: ClusterIP
