@@ -54,6 +54,10 @@ spec:
             - name: http
               containerPort: {{ .Values.port }}
           {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+{{ toYaml . | indent 12 }}
+          {{- end }}
           {{- if .Values.env }}
           env:
             {{- if kindIs "map" .Values.env }}

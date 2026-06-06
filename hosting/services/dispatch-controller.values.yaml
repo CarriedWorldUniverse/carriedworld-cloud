@@ -22,3 +22,11 @@ identity:
   key: keyfile.json
   mountPath: /etc/nexus
 tailnetEdge: false
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+  initialDelaySeconds: 15
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
