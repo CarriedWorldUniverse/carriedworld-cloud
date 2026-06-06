@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: logging
+data:
+  alertmanager.yml: |
+    route:
+      receiver: keel-bridge
+      group_by: ["alertname", "namespace", "pod"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+    receivers:
+      - name: keel-bridge
+        webhook_configs:
+          - url: http://loki-alert-bridge.nexus.svc.cluster.local:8080/alertmanager
+            send_resolved: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: logging
+  labels: {app: alertmanager}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: alertmanager}}
+  template:
+    metadata:
+      labels: {app: alertmanager}
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          args:
+            - "--config.file=/etc/alertmanager/alertmanager.yml"
+            - "--storage.path=/alertmanager"
+          ports:
+            - {name: http, containerPort: 9093}
+          volumeMounts:
+            - {name: config, mountPath: /etc/alertmanager}
+            - {name: data, mountPath: /alertmanager}
+      volumes:
+        - name: config
+          configMap: {name: alertmanager-config}
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: logging
+  labels: {app: alertmanager}
+spec:
+  type: ClusterIP
+  selector: {app: alertmanager}
+  ports:
+    - {name: http, port: 9093, targetPort: 9093}

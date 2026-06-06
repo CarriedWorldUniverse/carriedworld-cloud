@@ -19,12 +19,29 @@ loki:
   compactor:
     retention_enabled: true
     delete_request_store: filesystem
+  rulerConfig:
+    storage:
+      type: local
+      local:
+        directory: /rules
+    rule_path: /tmp/loki-ruler
+    alertmanager_url: http://alertmanager.logging.svc.cluster.local:9093
+    enable_alertmanager_v2: true
+    evaluation_interval: 1m
+    poll_interval: 1m
 singleBinary:
   replicas: 1
   persistence:
     enabled: true
     size: 20Gi
     storageClass: local-path
+  extraVolumes:
+    - name: loki-rules
+      configMap:
+        name: loki-alerting-rules
+  extraVolumeMounts:
+    - name: loki-rules
+      mountPath: /rules/fake
 read: {replicas: 0}
 write: {replicas: 0}
 backend: {replicas: 0}
