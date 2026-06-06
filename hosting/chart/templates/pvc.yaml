@@ -9,6 +9,9 @@ metadata:
 spec:
   accessModes:
 {{ toYaml .Values.storage.accessModes | indent 4 }}
+  {{- with .Values.storage.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
   resources:
     requests:
       storage: {{ .Values.storage.size | quote }}

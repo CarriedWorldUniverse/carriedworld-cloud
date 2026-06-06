@@ -23,6 +23,7 @@ storage:
   mountPath: /var/lib/data
   accessModes:
     - ReadWriteOnce
+  storageClassName: ""
 
 tailnetEdge: false
 tailnetName: ""

@@ -1,0 +1,16 @@
+name: sqld
+namespace: cwb
+kind: Deployment
+strategy: Recreate
+image: ghcr.io/tursodatabase/libsql-server:latest
+env:
+  SQLD_NODE: primary
+  SQLD_HTTP_LISTEN_ADDR: "0.0.0.0:8080"
+port: 8080
+storage:
+  size: 20Gi
+  mountPath: /var/lib/sqld
+  storageClassName: local-path
+identity:
+  mode: none
+tailnetEdge: false
