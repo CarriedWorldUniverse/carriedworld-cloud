@@ -18,6 +18,11 @@ envFromSecret: ""
 replicas: 1
 port: 0
 
+# ServiceAccount the pod runs as (for services needing k8s API access, e.g.
+# the dispatch-controller). Empty = default SA. The SA + RBAC are declared
+# separately (per-service rbac manifest).
+serviceAccountName: ""
+
 storage:
   size: ""
   mountPath: /var/lib/data

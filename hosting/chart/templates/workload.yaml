@@ -28,6 +28,9 @@ spec:
       labels:
 {{ include "hosted-service.selectorLabels" . | indent 8 }}
     spec:
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end }}
       {{- if eq .Values.identity.mode "custodian" }}
       initContainers:
         - name: identity-custodian

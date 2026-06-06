@@ -1,0 +1,24 @@
+name: dispatch-controller
+namespace: nexus
+kind: Deployment
+image: localhost/dispatch-controller:dev
+serviceAccountName: dispatch-controller
+args:
+  - "-k"
+  - "/etc/nexus/keyfile.json"
+  - "-namespace"
+  - "nexus"
+  - "-max-concurrent"
+  - "4"
+  - "-node-ip"
+  - "10.43.138.250"
+  - "-broker-host"
+  - "nexus.tail41686e.ts.net"
+env:
+  CW_SEAM_URL: "https://nexus.tail41686e.ts.net:7888"
+identity:
+  mode: secret
+  secretName: aspect-keyfile-dispatch-controller
+  key: keyfile.json
+  mountPath: /etc/nexus
+tailnetEdge: false
