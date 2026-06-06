@@ -23,6 +23,16 @@ The org's IAM. It controls **who an identity is** and **what rights it has** in 
 - Each org **enrolls its identities per-identity** (human or AI), with rights. Per-identity enrollment is deliberate: explicit principals, per-identity revocation, auditable — not "trust a whole domain."
 - An identity authenticates with its enrolled proof; herald asserts **who it is + what it may do**, *only within its own org*.
 
+#### Proof material — federated external attestation
+
+An enrolled identity proves itself with an **ephemeral attestation from a federated issuer**, never a long-lived held secret:
+
+- At genesis the org registers the **issuers it trusts** — a small set (e.g. its k8s cluster's TokenReview for in-cluster AI identities; a passkey/OIDC provider for humans).
+- Each identity is enrolled per-identity as a specific **`{issuer, subject}`** — e.g. identity `plumb` = subject `system:serviceaccount:nexus:plumb` at the nexus-cluster issuer; identity `alice` = her passkey subject.
+- To authenticate, the identity presents a **short-lived attestation from its issuer**. Herald verifies the issuer is trusted *for that org* **and** the subject matches the enrolled identity, then mints a **short-lived herald-identity session**.
+- The identity therefore holds **no long-lived CWB secret**: an AI's proof is its k8s-projected SA token (ephemeral, k8s-rotated); a human's is a device-bound passkey. This extends "no raw credentials" to the identity's *own authenticator*, not only to the external credentials custodian brokers — an AI agent carries nothing forgeable off-box.
+- **Casket** is the substrate for the sessions/assertions herald *issues*, and a casket public key is an accepted self-contained `{issuer, subject}` form for offline or edge identities — but it is **not** a held identity key an agent must carry.
+
 ### 2. Custodian — credential vault, keyed by herald identity
 
 The broker for **external** credentials granted to identities.
@@ -76,12 +86,12 @@ management org  ──grant (genesis, once)──▶  consumer org authority
 
 ## Scope boundary (NOT in Spec A)
 
-- **The identity-proof mechanism** (what an enrolled identity presents — external attestation vs held key, per identity type) is **herald's identity-credential model** — a bounded sub-design referenced here, not duplicated. Spec A fixes only that it is **per-identity enrollment, org-scoped**.
 - **The brokering mechanism** (custodian proxies the action vs issues a short-lived scoped token) is a custodian-internal choice to settle in the plan; both honor "no raw secret to the identity."
+- **The registered-issuer set + attestation formats** a given org trusts (k8s TokenReview, OIDC, passkey, casket public key) — the proof *model* is fixed (federated external attestation, per-identity `{issuer, subject}`); the concrete issuer adapters herald ships are an implementation list.
 - **Nexus's consumption** (keyfile → network → herald identity → custodian; the k8s-SA-vouched fleet) is **Spec B / NEX-467**.
 
 ## Open decisions for the implementation plan
 
-1. Proof material per identity type (external attestation, held key, or hybrid) — herald identity-credential model.
-2. Custodian brokering shape (proxy vs short-lived scoped token) per credential kind.
-3. Revocation enforcement points (assertion-time, retrieval-time, or both).
+1. Custodian brokering shape (proxy vs short-lived scoped token) per credential kind.
+2. Revocation enforcement points (assertion-time, retrieval-time, or both).
+3. The concrete issuer adapters herald ships first (k8s TokenReview is required for the nexus consumer; OIDC/passkey for humans).
