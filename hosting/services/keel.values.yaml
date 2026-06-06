@@ -1,6 +1,7 @@
 name: keel
 namespace: nexus
 kind: Deployment
+serviceAccountName: keel
 strategy: Recreate
 image: localhost/nexus-builder:dev
 command: ["/usr/local/bin/agentfunnel"]

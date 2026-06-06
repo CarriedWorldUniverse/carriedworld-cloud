@@ -1,0 +1,37 @@
+# keel infra-handler cluster access (read-only, all namespaces, NO secrets).
+# Lets the always-on alert handler inspect workloads/logs/events when a Loki
+# alert fires. Paired with kubectl in the worker image + serviceAccountName in
+# keel.values.yaml.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keel
+  namespace: nexus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: keel-readonly
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "services", "endpoints", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: keel-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: keel-readonly
+subjects:
+  - kind: ServiceAccount
+    name: keel
+    namespace: nexus
