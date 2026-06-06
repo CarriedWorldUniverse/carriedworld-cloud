@@ -1,0 +1,14 @@
+# Naming keystone: each hosted service that has a tailnet name gets a CoreDNS
+# rewrite mapping that name to its in-cluster Service. In-cluster pods then
+# resolve the tailnet name to the ClusterIP (and the LE cert matches) with NO
+# hostAlias. Tailnet clients resolve the same name via Tailscale MagicDNS.
+# Verified 2026-06-06 (Phase 0 spike): a no-hostAlias pod reached the broker
+# at nexus.tail41686e.ts.net:7888 with valid TLS.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  hosting.override: |
+    rewrite name nexus.tail41686e.ts.net nexus-broker.nexus.svc.cluster.local
