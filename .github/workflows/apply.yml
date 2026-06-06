@@ -1,0 +1,14 @@
+# Apply-on-merge reconcile. Primary trigger once a self-hosted runner with
+# cluster access (sudo kubectl + helm) is registered for this repo.
+name: apply
+on:
+  push:
+    branches: [main]
+    paths: ["hosting/**", "clusters/**"]
+jobs:
+  apply:
+    runs-on: [self-hosted, dmon]
+    steps:
+      - uses: actions/checkout@v4
+      - name: reconcile
+        run: KUBECTL="sudo kubectl" HELM="$(command -v helm)" bash hosting/apply.sh

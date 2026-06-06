@@ -1,0 +1,58 @@
+# Periodic reconcile (drift safety net) — every 15 min, pull carriedworld-cloud
+# and run hosting/apply.sh. The push-based CI workflow (.github/workflows/apply.yml)
+# is the primary trigger when a self-hosted runner exists; this is the backstop.
+# ACTIVATION: needs the `hosting-git-token` secret (a read-only GitHub token for
+# the private repo): kubectl create secret generic hosting-git-token -n nexus --from-literal=token=<PAT>
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: hosting-reconciler, namespace: nexus }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: hosting-reconciler }
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get","list","watch","create","update","patch"]
+  - apiGroups: [""]
+    resources: ["services","persistentvolumeclaims","configmaps","serviceaccounts"]
+    verbs: ["get","list","watch","create","update","patch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles","rolebindings"]
+    verbs: ["get","list","watch","create","update","patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: hosting-reconciler }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: hosting-reconciler }
+subjects:
+  - { kind: ServiceAccount, name: hosting-reconciler, namespace: nexus }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: { name: hosting-reconcile, namespace: nexus }
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          serviceAccountName: hosting-reconciler
+          restartPolicy: Never
+          containers:
+            - name: reconcile
+              image: dtzar/helm-kubectl:3.16.3
+              env:
+                - name: GIT_TOKEN
+                  valueFrom: { secretKeyRef: { name: hosting-git-token, key: token } }
+              command: ["/bin/sh","-c"]
+              args:
+                - |
+                  set -e
+                  apk add --no-cache git >/dev/null
+                  git clone --depth 1 "https://x-access-token:${GIT_TOKEN}@github.com/CarriedWorldUniverse/carriedworld-cloud" /repo
+                  cd /repo && KUBECTL=kubectl HELM=helm sh hosting/apply.sh
