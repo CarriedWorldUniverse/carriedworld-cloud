@@ -8,11 +8,17 @@ data:
     groups:
       - name: error-logs
         rules:
+          # Fires on a sustained burst of real error-LEVEL log lines (not the
+          # word error anywhere, which self-matched on the Loki ruler query
+          # logs). Excludes the logging namespace (loki/alloy/alertmanager) --
+          # the monitoring stack echoes our error queries in its own logs.
+          # Baseline (2026-06-07): cwb/sqld ~1-2 per 5m, others ~0; >10/5m for
+          # 5m sits well above the trickle and fires only on a genuine burst.
           - alert: LogErrorBurst
             expr: |
-              sum by (namespace, pod) (count_over_time({namespace=~".+"} |~ "(?i)(error|panic|fatal|exception)" [5m])) > 20
+              sum by (namespace, pod) (count_over_time({namespace=~".+", namespace!="logging"} |~ "(?i)(level=error|level=fatal| ERROR | FATAL |panic:)" [5m])) > 10
             for: 5m
             labels:
               severity: warning
             annotations:
-              summary: "Error log burst: {{ $labels.namespace }}/{{ $labels.pod }} (>20 error lines in 5m)"
+              summary: "Error-level log burst: {{ $labels.namespace }}/{{ $labels.pod }} (>10 error/fatal lines in 5m, sustained)"

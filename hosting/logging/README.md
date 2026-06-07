@@ -33,3 +33,6 @@ Files:
 Apply:
   kubectl apply -f logging/alertmanager.yaml -f logging/loki-rules.yaml
   helm template loki grafana/loki -n logging -f logging/loki-values.yaml | kubectl apply -n logging -f -
+
+### LogErrorBurst tuning (2026-06-07)
+Initial rule matched the word "error" anywhere -> self-matched on Loki own query-echo logs (the ruler/bridge LogQL queries contain "error|panic|fatal"). Tuned to: match real error LEVELS only ((?i)(level=error|level=fatal| ERROR | FATAL |panic:)), EXCLUDE the logging namespace (the monitoring stack echoes our queries), threshold >10 lines/5m/pod sustained 5m. Measured baseline: cwb/sqld ~1-2 per 5m, others ~0 -> fires only on a genuine burst. State after tuning: inactive/ok, 0 alerts. Tune the threshold/regex in loki-rules.yaml.
