@@ -25,6 +25,7 @@ spec:
       labels:
         app: nexus-broker
     spec:
+      serviceAccountName: nexus-broker
       containers:
         # 1. Tailnet identity (kernel mode so the broker's listening port is
         #    transparently reachable on the tailnet IP in the shared netns).
@@ -95,6 +96,18 @@ spec:
             # libSQL DSN → sqld platform service in the cwb namespace (NEX-455).
             - name: NEXUS_DB_DSN
               value: "http://sqld.cwb.svc.cluster.local:8080"
+            - name: CW_BUILDER_POOL
+              value: "builder-1,builder-2"
+            - name: CW_BUILDER_IMAGE
+              value: "localhost/nexus-builder:dev"
+            - name: CW_K8S_NAMESPACE
+              value: "nexus"
+            - name: CW_NODE_IP
+              value: "10.43.138.250"
+            - name: CW_BROKER_HOST
+              value: "nexus.tail41686e.ts.net"
+            - name: CW_BRIEF_TIMEOUT
+              value: "30m"
           envFrom:
             # NEXUS_TOKEN / NEXUS_AUTH_BYPASS / NEXUS_OPERATOR_RPID — created at
             # cutover from the host /etc/nexus/nexus.env (claude.env is dropped).

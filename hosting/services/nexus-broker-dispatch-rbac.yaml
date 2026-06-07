@@ -1,0 +1,23 @@
+# Dispatch RBAC for the broker-inline Runner (NEX-489). The broker now creates
+# builder Jobs + brief ConfigMaps and reads keyfile Secrets, so its pod SA needs
+# the perms the retired dispatch-controller had. Self-contained (broker-named)
+# so it survives the controller retirement.
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: nexus-broker, namespace: nexus }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: { name: nexus-broker-dispatch, namespace: nexus }
+rules:
+  - { apiGroups: ["batch"], resources: ["jobs"], verbs: ["get","list","watch","create","delete"] }
+  - { apiGroups: [""], resources: ["configmaps"], verbs: ["get","list","create","delete","update","patch"] }
+  - { apiGroups: [""], resources: ["secrets"], verbs: ["get","list","create","delete"] }
+  - { apiGroups: [""], resources: ["pods","pods/log"], verbs: ["get","list","watch"] }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: nexus-broker-dispatch, namespace: nexus }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: nexus-broker-dispatch }
+subjects:
+  - { kind: ServiceAccount, name: nexus-broker, namespace: nexus }
