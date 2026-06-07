@@ -96,8 +96,6 @@ spec:
             # libSQL DSN → sqld platform service in the cwb namespace (NEX-455).
             - name: NEXUS_DB_DSN
               value: "http://sqld.cwb.svc.cluster.local:8080"
-            - name: CW_BUILDER_POOL
-              value: "builder-1,builder-2"
             - name: CW_BUILDER_IMAGE
               value: "localhost/nexus-builder:dev"
             - name: CW_K8S_NAMESPACE
