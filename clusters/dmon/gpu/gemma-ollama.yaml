@@ -37,7 +37,7 @@ spec:
           image: ollama/ollama:0.30.5        # pinned; ships cuda_v13/sm_120
           env:
             - { name: OLLAMA_HOST, value: "0.0.0.0" }
-            - { name: OLLAMA_CONTEXT_LENGTH, value: "262144" }   # full 256K (Q4_0 + sliding-window fits)
+            - { name: OLLAMA_CONTEXT_LENGTH, value: "16384" }   # full 256K (Q4_0 + sliding-window fits)
             - { name: OLLAMA_KV_CACHE_TYPE, value: "q8_0" }      # quantized KV — stretches context
             - { name: OLLAMA_FLASH_ATTENTION, value: "1" }       # works on Blackwell in Ollama's llama.cpp
             - { name: OLLAMA_NUM_PARALLEL, value: "1" }          # raise for concurrency (×ctx multiplies KV)
