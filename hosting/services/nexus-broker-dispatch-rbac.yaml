@@ -15,7 +15,10 @@ rules:
   - { apiGroups: [""], resources: ["secrets"], verbs: ["get","list","create","delete"] }
   - { apiGroups: [""], resources: ["pods","pods/log"], verbs: ["get","list","watch"] }
   - { apiGroups: [""], resources: ["persistentvolumeclaims"], verbs: ["get","list","create"] }
-  - { apiGroups: ["apps"], resources: ["deployments"], verbs: ["get","list"] }
+  # update + scale: the wake controller / idle reaper scale napping aspects
+  # 0<->1 (NEX-568). Without deployments/scale the wake call is RBAC-denied.
+  - { apiGroups: ["apps"], resources: ["deployments"], verbs: ["get","list","update"] }
+  - { apiGroups: ["apps"], resources: ["deployments/scale"], verbs: ["get","update"] }
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
