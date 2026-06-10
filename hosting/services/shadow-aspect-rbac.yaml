@@ -1,0 +1,32 @@
+# shadow-aspect cluster authority — cluster-admin.
+#
+# shadow is the orchestrator aspect: the cloud seat of the same role the
+# operator's local shadow holds (deploys, rollouts, dispatch supervision,
+# cluster diagnosis). After the cutover it ran as the namespace default
+# ServiceAccount — zero RBAC, every kubectl Forbidden — which gutted its
+# ability to operate the platform it is supposed to manage.
+#
+# Cluster-admin ratified by the operator 2026-06-11: single-operator
+# cluster, herald-rooted identity, same trust tier as the operator's own
+# host-side shadow. Audit = k8s audit log + the reconcile history; the
+# declarative reconcile path (hosting/ PRs) remains the preferred route
+# for standing changes, raw kubectl the operational/emergency lane.
+# Paired with serviceAccountName in nexus deploy/shadow/deployment.yaml.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shadow-aspect
+  namespace: nexus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: shadow-aspect-cluster-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: shadow-aspect
+    namespace: nexus
