@@ -94,7 +94,7 @@ spec:
             # after quiet. always-on entries are documentation-grade (the
             # controller and reaper only act on wake-on-mention).
             - name: NEXUS_ASPECT_WAKE_POLICY
-              value: "plumb=wake-on-mention,anvil=wake-on-mention,keel=always-on,maren=always-on,shadow=always-on"
+              value: "plumb=wake-on-mention,anvil=wake-on-mention,harrow=wake-on-mention,keel=always-on,maren=always-on,shadow=always-on"
             - name: NEXUS_WAKE_IDLE_TIMEOUT
               value: "15m"
             - name: NEXUS_DATA_DIR

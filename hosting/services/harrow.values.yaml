@@ -1,0 +1,29 @@
+# harrow — napping research aspect (roundtable, wake-on-mention).
+# Plain builder image (research = the lynxai browsing SERVICE + config, no
+# specialist layer). replicas:0 — the broker's wake controller scales 0→1 on
+# DM/@mention and the idle reaper scales back to 0. Do not scale manually.
+# Provider defaults to local gemma (cheap research lane); change via the
+# broker's per-aspect provider binding, not here.
+name: harrow
+namespace: nexus
+kind: Deployment
+strategy: Recreate
+replicas: 0
+image: localhost/nexus-builder:dev
+command: ["/usr/local/bin/agentfunnel"]
+args: ["-k", "/etc/nexus/keyfile.json", "-context-mode", "global"]
+env:
+  OPENAI_BASE_URL: "http://gemma-ollama.nexus.svc.cluster.local:11434/v1"
+  OPENAI_API_KEY: "ollama"
+  CW_SEAM_URL: "https://nexus.tail41686e.ts.net:7888"
+identity:
+  mode: secret
+  secretName: aspect-keyfile-harrow
+  key: keyfile.json
+  mountPath: /etc/nexus
+# Funnel/session state survives nap cycles (shadow's ~/.claude PVC pattern).
+# Renders as PVC "harrow-data".
+storage:
+  size: 1Gi
+  mountPath: /root/.claude
+tailnetEdge: false
