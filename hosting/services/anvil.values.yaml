@@ -1,0 +1,27 @@
+# anvil — napping builder aspect (roundtable P1, wake-on-mention).
+# Same agentfunnel builder image as keel, but replicas:0 — the broker's wake
+# controller scales 0→1 on DM/@mention and the idle reaper scales back to 0.
+# Do not scale manually; the broker owns the replica count.
+name: anvil
+namespace: nexus
+kind: Deployment
+strategy: Recreate
+replicas: 0
+image: localhost/nexus-builder:dev
+command: ["/usr/local/bin/agentfunnel"]
+args: ["-k", "/etc/nexus/keyfile.json", "-context-mode", "global"]
+env:
+  OPENAI_BASE_URL: "http://gemma-ollama.nexus.svc.cluster.local:11434/v1"
+  OPENAI_API_KEY: "ollama"
+  CW_SEAM_URL: "https://nexus.tail41686e.ts.net:7888"
+identity:
+  mode: secret
+  secretName: aspect-keyfile-anvil
+  key: keyfile.json
+  mountPath: /etc/nexus
+# Funnel/claude session state survives nap cycles (shadow's ~/.claude PVC
+# pattern, same 1Gi sizing). Renders as PVC "anvil-data".
+storage:
+  size: 1Gi
+  mountPath: /root/.claude
+tailnetEdge: false
