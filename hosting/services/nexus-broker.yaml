@@ -89,6 +89,14 @@ spec:
                 -tls-cert /certs/tls.crt -tls-key /certs/tls.key \
                 -aspect-dir /var/lib/nexus/aspects
           env:
+            # Napping presence (roundtable P1): wake-on-mention aspects are
+            # scaled 0->1 by the broker on DM/@mention and reaped back to 0
+            # after quiet. always-on entries are documentation-grade (the
+            # controller and reaper only act on wake-on-mention).
+            - name: NEXUS_ASPECT_WAKE_POLICY
+              value: "plumb=wake-on-mention,anvil=wake-on-mention,keel=always-on,maren=always-on,shadow=always-on"
+            - name: NEXUS_WAKE_IDLE_TIMEOUT
+              value: "15m"
             - name: NEXUS_DATA_DIR
               value: /var/lib/nexus
             - name: NEXUS_ASPECT_DIR
