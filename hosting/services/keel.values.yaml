@@ -6,9 +6,17 @@ strategy: Recreate
 image: localhost/nexus-builder:dev
 command: ["/usr/local/bin/agentfunnel"]
 args: ["-k", "/etc/nexus/keyfile.json", "-context-mode", "global"]
+# Local gemma via ollama native /api/chat lane. OLLAMA_BASE_URL (no /v1)
+# selects the native endpoint so reasoning lands in a separate field instead
+# of bleeding harmony channel tokens into chat content, and token usage is
+# reported (the openai-compat /v1 shim leaked tokens + zeroed usage). Provider
+# binding lives in the broker per-aspect store (aspects.provider=ollama), set
+# out-of-band; these env vars point the harness at the native endpoint.
 env:
   OPENAI_BASE_URL: "http://gemma-ollama.nexus.svc.cluster.local:11434/v1"
   OPENAI_API_KEY: "ollama"
+  OLLAMA_BASE_URL: "http://gemma-ollama.nexus.svc.cluster.local:11434"
+  OLLAMA_KEEP_ALIVE: "-1s"
   CW_SEAM_URL: "https://nexus.tail41686e.ts.net:7888"
 identity:
   mode: secret
