@@ -12,9 +12,11 @@ replicas: 0
 image: localhost/nexus-builder:dev
 command: ["/usr/local/bin/agentfunnel"]
 args: ["-k", "/etc/nexus/keyfile.json", "-context-mode", "global"]
+# Native ollama /api/chat lane (provider=ollama in sqld) — clean tool-calls +
+# usage reporting, vs the leaky openai-compat /v1 shim. Mirrors keel.
 env:
-  OPENAI_BASE_URL: "http://gemma-ollama.nexus.svc.cluster.local:11434/v1"
-  OPENAI_API_KEY: "ollama"
+  OLLAMA_BASE_URL: "http://gemma-ollama.nexus.svc.cluster.local:11434"
+  OLLAMA_KEEP_ALIVE: "-1s"
   CW_SEAM_URL: "https://nexus.tail41686e.ts.net:7888"
 identity:
   mode: secret
