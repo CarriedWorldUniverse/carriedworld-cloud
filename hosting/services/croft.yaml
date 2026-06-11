@@ -231,10 +231,15 @@ data:
       apt-get install -y -qq --no-install-recommends openssh-server mosh ca-certificates sudo >/dev/null
     fi
     # claude-code (the orchestrator runs `claude` in-pod). npm global; tolerate offline.
+    # This runs as root: keep root's npm cache off the PVC home (root-owned files
+    # there break the operator user's own npm — "cache folder contains root-owned files").
     if ! command -v claude >/dev/null 2>&1; then
       log "installing claude-code (best-effort)"
-      npm install -g @anthropic-ai/claude-code >/dev/null 2>&1 || log "claude-code install skipped (offline?)"
+      npm_config_cache=/tmp/npm-root-cache npm install -g @anthropic-ai/claude-code >/dev/null 2>&1 || log "claude-code install skipped (offline?)"
     fi
+    # heal any root-owned files a past boot (or sudo npm) left in operator's home
+    [ -e /home/operator/.npm ] && chown -R 1000:37 /home/operator/.npm 2>/dev/null || true
+    [ -e /home/operator/.config ] && chown 1000:37 /home/operator/.config 2>/dev/null || true
 
     # --- operator user whose $HOME is the PVC ---
     if ! id operator >/dev/null 2>&1; then
