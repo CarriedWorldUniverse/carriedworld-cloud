@@ -2,7 +2,7 @@
 
 > **Status:** architecture (operator-resolved 2026-06-12). How the operator's workspace (croft) lives within the cloud, its relationship to CWB, its access, and the layering that generalizes to Strata.
 
-## The three layers (what lives where)
+## The layering (what lives where)
 
 ```
   HOST  (dMonextreme — a Linux box; k3s runs ON it)
@@ -10,14 +10,20 @@
    │     so it survives the cloud being down — the escape hatch that resurrects it.
    │     (Tonight's proof: external builder fixed dMon's kernel because it was below k3s.)
    └─ k3s  =  "the cloud"  (the infra/substrate everything runs on)
-        ├─ CWB  =  "the personal cloud"   (nexus + pillars + interchange + dispatch)
-        │     └─ interchange = the one front door to the personal cloud
-        └─ croft  (its own namespace)     ← a SEPARATE workspace container, NOT part of CWB
+        ├─ CWB  =  "the personal cloud"  — the platform substrate / primitives:
+        │     herald (identity/org) · ledger (work) · commonplace (knowledge) ·
+        │     cairn (git) · custodian (secrets) · almanac (config) · interchange (the boundary/exchange)
+        │
+        └─ CONSUMERS of CWB (peers — each org-scoped, each reaching CWB through interchange):
+              ├─ nexus   ← the agent runtime (broker + aspects + dispatch) — an APP on the cloud
+              └─ croft   ← the operator workspace — another app on the cloud
 ```
 
 The key distinctions the model rests on:
-- **croft is *on* the cloud, not *in* the personal cloud.** It runs on the same k3s box (co-located infra) but it is its own namespace and a **consumer** of CWB — it reaches nexus/the pillars *through interchange*, as the operator identity, the way any consumer would. It is not a nexus internal component.
-- **The survivor is the host, not croft.** Because you can always `ssh dmonextreme` (below k3s) and build from there, croft is *free to just be a good workspace* — it doesn't have to survive cloud-down. (Replicating croft's toolchain onto the host so the backup feels identical is a nice-to-have, not load-bearing.)
+- **CWB *is* the personal cloud.** The pillars + interchange are the substrate — the cloud primitives (IAM = herald, data = ledger/commonplace, secrets = custodian, params = almanac, git = cairn, gateway/exchange = interchange). Everything else *runs on* it.
+- **nexus is a consumer, not infrastructure.** The agent runtime is an **application on the cloud** — it consumes herald (org identity), ledger, almanac, custodian through interchange, exactly as croft does. It is *not* part of CWB.
+- **croft and nexus are peers.** Both are org-scoped consumers of CWB, each reaching it through interchange. croft is its own namespace; nexus is its own (the "nexus cluster", separate).
+- **The survivor is the host, not croft.** You can always `ssh dmonextreme` (below k3s) and build from there, so croft is *free to just be a good workspace* — it needn't survive cloud-down. (Replicating croft's toolchain onto the host so the backup feels identical is a nice-to-have, not load-bearing.)
 
 ## What croft is
 
@@ -39,12 +45,13 @@ croft sits **outside** CWB's infrastructure, so its access and CWB's access are 
 
 **herald is the front; nexus + agents are the org runtime behind it.** What croft gets from CWB is *org access* (a herald org identity); the broker and aspects are reached as a consequence of org membership, not as separate raw endpoints. This is the Strata isolation seam: org A's workspace consumes org A's access and reaches only org A's runtime.
 
-### nexus has two faces (and the operator uses the boundary one)
+### croft → nexus is peer-to-peer through the exchange
 
-- **Aspect side** — aspects connect *directly* to the broker (internal, cluster DNS, the registration/WS mesh). They are *in* the personal cloud; this face is the runtime.
-- **Operator/consumer side** — the operator's connection comes **through interchange**, not the aspect-facing endpoint. `croft → interchange → nexus`, where the org-identity/authz is enforced at the boundary. Mirrors herald's dual-faced shape (humans via one face, internal via another).
+nexus and croft are both consumers of CWB. interchange is the **org's exchange**: it admits consumers (org identity) and relays *between* them. So:
+- **nexus's internal mesh** (broker ↔ aspects, cluster DNS) is *nexus's own internals* — an implementation detail of the agent-runtime app, not a CWB or croft concern. Other consumers never touch the aspect mesh.
+- **croft reaches nexus through interchange** — `croft → interchange → nexus` is one org-consumer being relayed to another (the consumer nexus exposes for the agent service), org-identity-gated at the boundary. Mirrors herald's dual-faced shape (humans via one face, internal via another).
 
-Interim vs target: today croft connects to the broker's `/connect` WS with the `NEXUS_TOKEN` — that's the *aspect-side* path, the convenient interim. The **target is the operator connection arriving via interchange** (org-identity-gated at the boundary), which is the laters work, not a v1 blocker.
+Interim vs target: today croft connects to the broker's `/connect` WS directly with the `NEXUS_TOKEN` — the convenient interim (it reaches nexus's own endpoint, bypassing the exchange). The **target is reaching nexus via interchange** as a peer org-consumer (org-identity-gated), which is the laters work, not a v1 blocker.
 
 **The single-front-door discipline governs CWB, not croft.** "Everything behind interchange, no per-pod identities, internal = cluster DNS" applies to CWB's *own services* (the pillars, the broker) — they hide behind the boundary. croft is *not* one of those services; it lives outside that infrastructure. So croft having its own access surface is correct, not a violation. (Earlier framing had croft *inside* nexus and proposed an `interchange → nexus → croft` route — that was the wrong side of the boundary. nexus never routes *into* croft.)
 
@@ -54,7 +61,7 @@ Interim vs target: today croft connects to the broker's `/connect` WS with the `
 
 ## Strata generalization
 
-croft is the **first workspace-container primitive**. A Strata instance = the CWB personal cloud **+ zero-or-more workspace containers** (croft-shaped) — each a *consumer* sitting outside CWB, with its own access surface, reaching the shared personal cloud through interchange as its identity. The product shape: "your private cloud (CWB, one front door) plus your workspaces (yours to reach, theirs to consume it)." The host-below-k3s remains the universal cold-start floor.
+A **Strata instance = CWB (the personal cloud) + its consumer apps.** CWB is the substrate (identity, data, secrets, config, git, the exchange); the apps that run on it are peers — **nexus** (the agent runtime), **croft** (the operator workspace), and whatever else you build — each org-scoped, each reaching CWB through interchange. The product shape: *"your private cloud (CWB) is the primitives; the agent runtime and your workspaces are apps you run on it."* This is a far sharper story than "nexus is the platform": nexus is just the first, most important consumer; croft is the second. The host-below-k3s remains the universal cold-start floor.
 
 ## Status / sequence
 
