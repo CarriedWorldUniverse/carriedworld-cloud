@@ -23,13 +23,33 @@
 #     -operator-token-file. Token mounted both as env NEXUS_TOKEN AND written to
 #     /home/operator/.config/nexus/operator.token by the startup script.
 #
-# SECRETS (created out-of-band via kubectl, NEVER in this committed yaml):
-#   * croft-ssh-pubkey      — operator's SSH ed25519 authorized_keys (ConfigMap-grade
-#                             but kept as a Secret for uniformity; pubkey is non-secret).
-#   * croft-operator-token  — key NEXUS_TOKEN, copied from nexus/nexus-broker-env.
-#   * tailscale-auth        — key TS_AUTHKEY, copied from nexus/tailscale-auth.
-# See hosting/services/README-croft-secrets.md (or the NEX-618 ticket) for the
-# exact kubectl create commands. None of those values live in git.
+# SECRETS (created out-of-band via kubectl, NEVER in this committed yaml).
+# Provision each before applying this manifest (placeholder values shown — supply
+# the real ones at create time; none of these values live in git):
+#
+#   * croft-ssh-pubkey      — operator's SSH ed25519 authorized_keys (pubkey is
+#                             non-secret; kept as a Secret for mount uniformity).
+#       kubectl -n croft create secret generic croft-ssh-pubkey \
+#         --from-file=authorized_keys=/path/to/operator_id_ed25519.pub
+#
+#   * croft-operator-token  — key NEXUS_TOKEN, the operator network identity
+#                             (resolves to operator/Admin via the broker TokenStore);
+#                             copied from nexus/nexus-broker-env.
+#       kubectl -n croft create secret generic croft-operator-token \
+#         --from-literal=NEXUS_TOKEN='<operator-nexus-token>'
+#
+#   * croft-claude-auth     — key CLAUDE_CODE_OAUTH_TOKEN, authenticates Claude Code
+#                             in-pod at container level (so a from-scratch redeploy
+#                             comes up already authed).
+#       kubectl -n croft create secret generic croft-claude-auth \
+#         --from-literal=CLAUDE_CODE_OAUTH_TOKEN='<claude-code-oauth-token>'
+#
+#   * tailscale-auth        — key TS_AUTHKEY, the sidecar's tailnet join key;
+#                             copied from nexus/tailscale-auth.
+#       kubectl -n croft create secret generic tailscale-auth \
+#         --from-literal=TS_AUTHKEY='tskey-auth-...'
+#
+# See the NEX-618 ticket for provenance. None of those values live in git.
 ---
 apiVersion: v1
 kind: Namespace
@@ -137,6 +157,13 @@ spec:
                 secretKeyRef:
                   name: croft-operator-token
                   key: NEXUS_TOKEN
+            # Claude Code auth at container level so a from-scratch redeploy comes
+            # up already authenticated (the orchestrator runs `claude` in-pod).
+            - name: CLAUDE_CODE_OAUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: croft-claude-auth
+                  key: CLAUDE_CODE_OAUTH_TOKEN
             # Broker over the tailnet (publicly-trusted LE cert; no custom CA).
             - name: CW_SEAM_URL
               value: https://nexus.tail41686e.ts.net:7888
@@ -300,3 +327,20 @@ spec:
     app: croft
   ports:
     - { name: ssh, port: 22, targetPort: 22 }
+---
+# Clustered (ClusterIP) SSH service — in-cluster reach to croft's sshd on a stable
+# VIP (e.g. for kubectl port-forward svc/croft-ssh). External SSH/mosh still goes
+# over the tailnet via the sidecar; this is the in-cluster convenience endpoint.
+apiVersion: v1
+kind: Service
+metadata:
+  name: croft-ssh
+  namespace: croft
+  labels:
+    app: croft-ssh
+spec:
+  type: ClusterIP
+  selector:
+    app: croft
+  ports:
+    - { name: "22-22", port: 22, targetPort: 22, protocol: TCP }
