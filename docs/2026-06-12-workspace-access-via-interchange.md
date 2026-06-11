@@ -35,9 +35,16 @@ croft sits **outside** CWB's infrastructure, so its access and CWB's access are 
 |---|---|---|
 | **operator → croft** (reach the workspace) | croft's **own** ingress — SSH now, web later | croft is a separate consumer, not a CWB service. It is entitled to its own front door, the way any external client has its own connectivity. nexus/interchange are **not** in this path. |
 | **croft → CWB** (consume *org access*) | **through interchange**, authenticating as a **herald org identity** | croft consumes CWB for **org access** — a herald-rooted org identity (the custodian-key-model org-derived identity, not the static NEXUS_TOKEN long-term). |
-| **croft → nexus + agents** (the org's runtime) | *behind* the org access — a consequence of being an admitted org member | nexus (the org's broker) and the agents (aspects) are **org-scoped resources behind CWB org access**. croft reaches them *because* it holds org access, not via a direct raw line. |
+| **croft → nexus + agents** (the org's runtime) | the operator connection arrives at nexus **via interchange** (the consumer/boundary side), *not* the aspect side | nexus (the org's broker) + the agents are **org-scoped resources behind CWB org access**. croft reaches them *because* it holds org access — and its broker connection comes through the boundary, distinct from how aspects attach. |
 
 **herald is the front; nexus + agents are the org runtime behind it.** What croft gets from CWB is *org access* (a herald org identity); the broker and aspects are reached as a consequence of org membership, not as separate raw endpoints. This is the Strata isolation seam: org A's workspace consumes org A's access and reaches only org A's runtime.
+
+### nexus has two faces (and the operator uses the boundary one)
+
+- **Aspect side** — aspects connect *directly* to the broker (internal, cluster DNS, the registration/WS mesh). They are *in* the personal cloud; this face is the runtime.
+- **Operator/consumer side** — the operator's connection comes **through interchange**, not the aspect-facing endpoint. `croft → interchange → nexus`, where the org-identity/authz is enforced at the boundary. Mirrors herald's dual-faced shape (humans via one face, internal via another).
+
+Interim vs target: today croft connects to the broker's `/connect` WS with the `NEXUS_TOKEN` — that's the *aspect-side* path, the convenient interim. The **target is the operator connection arriving via interchange** (org-identity-gated at the boundary), which is the laters work, not a v1 blocker.
 
 **The single-front-door discipline governs CWB, not croft.** "Everything behind interchange, no per-pod identities, internal = cluster DNS" applies to CWB's *own services* (the pillars, the broker) — they hide behind the boundary. croft is *not* one of those services; it lives outside that infrastructure. So croft having its own access surface is correct, not a violation. (Earlier framing had croft *inside* nexus and proposed an `interchange → nexus → croft` route — that was the wrong side of the boundary. nexus never routes *into* croft.)
 
