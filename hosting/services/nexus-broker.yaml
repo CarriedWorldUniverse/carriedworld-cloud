@@ -114,6 +114,14 @@ spec:
               value: "nexus.tail41686e.ts.net"
             - name: CW_BRIEF_TIMEOUT
               value: "30m"
+            # Ollama provider endpoint for dispatched Jobs (NEX-610): hands of
+            # an ollama-provider parent (and ollama ticket dispatches) get
+            # OLLAMA_BASE_URL/OLLAMA_KEEP_ALIVE injected into their Job spec —
+            # without it the in-Job agentfunnel dials localhost:11434.
+            - name: CW_OLLAMA_BASE_URL
+              value: "http://gemma-ollama.nexus.svc.cluster.local:11434"
+            - name: CW_OLLAMA_KEEP_ALIVE
+              value: "-1s"
           envFrom:
             # NEXUS_TOKEN / NEXUS_AUTH_BYPASS / NEXUS_OPERATOR_RPID — created at
             # cutover from the host /etc/nexus/nexus.env (claude.env is dropped).
