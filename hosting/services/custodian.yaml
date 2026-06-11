@@ -1,0 +1,136 @@
+# custodian — the CWB external-credential vault pillar (M1).
+#
+# Mirrors almanac's deploy shape: a cwb-ca-signed server cert (cert-manager
+# Certificate → cwb-ca Issuer), a local-path PVC for the sqlite db, a Deployment
+# running the static binary on scratch over mTLS, and a ClusterIP Service on the
+# gRPC port (:8085 — almanac is :8083).
+#
+# custodian runs FAIL-CLOSED: it will not serve without (a) the mTLS server cert
+# (CUSTODIAN_TLS_CERT/_KEY/_CA) and (b) the org base seed (CUSTODIAN_ORG_SEED).
+# The seed is an interim single-org secret supplied out-of-band as the k8s
+# Secret `custodian-org-seed` (NOT in this manifest); the herald-derive wire is
+# the documented M2 successor. Create it before applying:
+#   head -c32 /dev/urandom | base64 | \
+#     xargs -I{} sudo k3s kubectl create secret generic custodian-org-seed \
+#       -n cwb --from-literal=CUSTODIAN_ORG_SEED={}
+# CUSTODIAN_DEV_INSECURE is deliberately UNSET — custodian runs with the real
+# seed and real mTLS in the cluster.
+#
+# Because it holds irreplaceable customer credentials, the org-seed secret is
+# the escrow-worthy material (security design §6/§7); back it up out-of-band.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: custodian-tls
+  namespace: cwb
+spec:
+  secretName: custodian-tls
+  dnsNames:
+    - custodian.cwb.svc
+    - custodian.cwb.svc.cluster.local
+    - custodian
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: cwb-ca
+    kind: Issuer
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: custodian-data
+  namespace: cwb
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: custodian
+  namespace: cwb
+  labels:
+    app: custodian
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: custodian
+  template:
+    metadata:
+      labels:
+        app: custodian
+    spec:
+      containers:
+        - name: custodian
+          image: localhost/custodian:dev
+          imagePullPolicy: Never
+          ports:
+            - name: grpc
+              containerPort: 8085
+          env:
+            - name: CUSTODIAN_GRPC_ADDR
+              value: ":8085"
+            - name: CUSTODIAN_DB
+              value: "/var/lib/cwb/custodian.db"
+            - name: CUSTODIAN_TLS_CERT
+              value: "/etc/cwb/tls/tls.crt"
+            - name: CUSTODIAN_TLS_KEY
+              value: "/etc/cwb/tls/tls.key"
+            - name: CUSTODIAN_TLS_CA
+              value: "/etc/cwb/tls/ca.crt"
+            # Interim single-org base seed (out-of-band Secret; see header).
+            - name: CUSTODIAN_ORG_SEED
+              valueFrom:
+                secretKeyRef:
+                  name: custodian-org-seed
+                  key: CUSTODIAN_ORG_SEED
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/cwb
+            - name: tls
+              mountPath: /etc/cwb/tls
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: 8085
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 8085
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: custodian-data
+        - name: tls
+          secret:
+            secretName: custodian-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: custodian
+  namespace: cwb
+  labels:
+    app: custodian
+spec:
+  type: ClusterIP
+  selector:
+    app: custodian
+  ports:
+    - name: grpc
+      port: 8085
+      targetPort: grpc
+      protocol: TCP
