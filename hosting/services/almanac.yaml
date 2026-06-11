@@ -1,0 +1,133 @@
+# almanac — the CWB configuration & internal-secrets pillar (M1).
+#
+# Mirrors ledger's deploy shape (ledger/deploy/k3s): a cwb-ca-signed server
+# cert (cert-manager Certificate → cwb-ca Issuer), a local-path PVC for the
+# sqlite db, a Deployment running the static binary on scratch over mTLS, and a
+# ClusterIP Service on the gRPC port.
+#
+# almanac runs FAIL-CLOSED: it will not serve without (a) the mTLS server cert
+# (ALMANAC_TLS_CERT/_KEY/_CA) and (b) the org base seed (ALMANAC_ORG_SEED). The
+# seed is an interim single-org secret supplied out-of-band as the k8s Secret
+# `almanac-org-seed` (NOT in this manifest); the herald-DeriveOrgKey wire is the
+# documented M2 successor. Create it before applying:
+#   head -c32 /dev/urandom | base64 | \
+#     xargs -I{} sudo k3s kubectl create secret generic almanac-org-seed \
+#       -n cwb --from-literal=ALMANAC_ORG_SEED={}
+# ALMANAC_DEV_INSECURE is deliberately UNSET — almanac runs with the real seed
+# and real mTLS in the cluster.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: almanac-tls
+  namespace: cwb
+spec:
+  secretName: almanac-tls
+  dnsNames:
+    - almanac.cwb.svc
+    - almanac.cwb.svc.cluster.local
+    - almanac
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: cwb-ca
+    kind: Issuer
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: almanac-data
+  namespace: cwb
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: almanac
+  namespace: cwb
+  labels:
+    app: almanac
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: almanac
+  template:
+    metadata:
+      labels:
+        app: almanac
+    spec:
+      containers:
+        - name: almanac
+          image: localhost/almanac:dev
+          imagePullPolicy: Never
+          ports:
+            - name: grpc
+              containerPort: 8083
+          env:
+            - name: ALMANAC_GRPC_ADDR
+              value: ":8083"
+            - name: ALMANAC_DB
+              value: "/var/lib/cwb/almanac.db"
+            - name: ALMANAC_TLS_CERT
+              value: "/etc/cwb/tls/tls.crt"
+            - name: ALMANAC_TLS_KEY
+              value: "/etc/cwb/tls/tls.key"
+            - name: ALMANAC_TLS_CA
+              value: "/etc/cwb/tls/ca.crt"
+            # Interim single-org base seed (out-of-band Secret; see header).
+            - name: ALMANAC_ORG_SEED
+              valueFrom:
+                secretKeyRef:
+                  name: almanac-org-seed
+                  key: ALMANAC_ORG_SEED
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/cwb
+            - name: tls
+              mountPath: /etc/cwb/tls
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: 8083
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 8083
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: almanac-data
+        - name: tls
+          secret:
+            secretName: almanac-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: almanac
+  namespace: cwb
+  labels:
+    app: almanac
+spec:
+  type: ClusterIP
+  selector:
+    app: almanac
+  ports:
+    - name: grpc
+      port: 8083
+      targetPort: grpc
+      protocol: TCP
