@@ -1,0 +1,31 @@
+# cwb-ca client cert for the broker→custodian mTLS hop (custodian M1).
+#
+# custodian enforces RequireAndVerifyClientCert against the cwb-ca pool, so the
+# broker must present a cwb-ca-signed CLIENT cert when it routes kind="git"
+# credential.fetch to custodian. cert-manager Certificates are namespaced and
+# custodian's issuer (cwb-ca) lives in cwb, so the Certificate is created in cwb
+# and the resulting secret is mirrored into the nexus namespace (where the
+# broker mounts it).
+#
+# Mirror step (one-off after this Certificate is Ready):
+#   kubectl get secret nexus-broker-custodian-client -n cwb -o json \
+#     | jq '.metadata={"name":"nexus-broker-custodian-client","namespace":"nexus"} | del(.status)' \
+#     | kubectl apply -f -
+# (A reflector/sync controller would automate this; manual mirror for M1.)
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nexus-broker-custodian-client
+  namespace: cwb
+spec:
+  secretName: nexus-broker-custodian-client
+  commonName: nexus-broker
+  usages:
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: cwb-ca
+    kind: Issuer
