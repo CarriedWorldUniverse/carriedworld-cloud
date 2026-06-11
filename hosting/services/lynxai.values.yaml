@@ -1,0 +1,18 @@
+name: lynxai
+namespace: nexus
+kind: Deployment
+strategy: Recreate
+image: localhost/lynxai:dev
+env:
+  LYNXAI_DATA_DIR: /data
+# LYNXAI_LLM_API_KEY (DeepSeek, /extract LLM) — Secret created out-of-band:
+#   kubectl -n nexus create secret generic lynxai-env --from-literal=LYNXAI_LLM_API_KEY=...
+envFromSecret: lynxai-env
+port: 7878
+storage:
+  size: 5Gi
+  mountPath: /data
+  storageClassName: local-path
+identity:
+  mode: none
+tailnetEdge: false
