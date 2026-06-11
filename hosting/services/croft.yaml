@@ -1,0 +1,302 @@
+# croft (NEX-618) — the operator's persistent, SSH-able workspace IN the cluster.
+#
+# croft is the operator's home on the dMon k3s cluster: GPU-adjacent, cluster-API
+# in reach, persistent, and carrying shadow's (the orchestrator's) memory +
+# sessions so shadow can run from here. EVERYTHING in it operates as the OPERATOR
+# network identity — the nexus broker NEXUS_TOKEN bearer resolves to operator/Admin.
+#
+# Shape (mirrors the cluster's existing patterns):
+#   * StatefulSet for stable identity + a sticky PVC (croft-home @ /home/operator).
+#   * Base image localhost/nexus-builder:dev (Debian bookworm: go/git/gh/node).
+#     The startup script apt-installs openssh-server + mosh + claude-code on first
+#     boot (persisted nowhere needed — re-runs are cheap/idempotent) and provisions
+#     the `operator` user whose $HOME is the PVC.
+#   * A tailscale sidecar (kernel mode, tag, filesystem state on the PVC subPath,
+#     TS_AUTHKEY from the croft tailscale-auth secret) mirroring nexus-broker.yaml,
+#     so the operator SSHes operator@croft.tail41686e.ts.net from anywhere.
+#   * ServiceAccount croft + cluster-admin ClusterRoleBinding (see croft-rbac note):
+#     this IS the operator's workspace; same trust tier as the operator's own host
+#     shadow (cluster-admin already ratified for shadow-aspect 2026-06-11).
+#   * Broker reach: over the tailnet at https://nexus.tail41686e.ts.net:7888 (the
+#     publicly-trusted Let's Encrypt cert the broker provisions — no custom CA to
+#     mount). Operator clients auth with the NEXUS_TOKEN via nexus-comms-mcp's
+#     -operator-token-file. Token mounted both as env NEXUS_TOKEN AND written to
+#     /home/operator/.config/nexus/operator.token by the startup script.
+#
+# SECRETS (created out-of-band via kubectl, NEVER in this committed yaml):
+#   * croft-ssh-pubkey      — operator's SSH ed25519 authorized_keys (ConfigMap-grade
+#                             but kept as a Secret for uniformity; pubkey is non-secret).
+#   * croft-operator-token  — key NEXUS_TOKEN, copied from nexus/nexus-broker-env.
+#   * tailscale-auth        — key TS_AUTHKEY, copied from nexus/tailscale-auth.
+# See hosting/services/README-croft-secrets.md (or the NEX-618 ticket) for the
+# exact kubectl create commands. None of those values live in git.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: croft
+  labels:
+    app.kubernetes.io/part-of: nexus
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: croft
+  namespace: croft
+---
+# cluster-admin: croft IS the operator's cluster workspace — the operator runs the
+# cluster. Same trust tier as the operator's host shadow and the shadow-aspect
+# cloud seat (cluster-admin ratified by the operator 2026-06-11). Audit = k8s
+# audit log; the declarative reconcile path (hosting/ PRs) stays the preferred
+# route for standing changes, raw in-pod kubectl the operational/emergency lane.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: croft-operator-cluster-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: croft
+    namespace: croft
+---
+# The operator's persistent home: repos, dotfiles, shadow's ~/.claude (memory +
+# session transcripts), the tailscale node state (subPath ts-state).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: croft-home
+  namespace: croft
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: croft
+  namespace: croft
+spec:
+  serviceName: croft
+  replicas: 1
+  selector:
+    matchLabels:
+      app: croft
+  template:
+    metadata:
+      labels:
+        app: croft
+    spec:
+      serviceAccountName: croft
+      # The operator user's home is the PVC; sshd runs as the operator user.
+      containers:
+        # 1. Tailnet identity (kernel mode → the pod's sshd :22 + mosh are
+        #    reachable on the croft tailnet IP / croft.tail41686e.ts.net in the
+        #    shared netns). Mirrors nexus-broker.yaml's sidecar.
+        - name: tailscale
+          image: ghcr.io/tailscale/tailscale:stable
+          env:
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth
+                  key: TS_AUTHKEY
+            - name: TS_HOSTNAME
+              value: "croft"
+            - name: TS_USERSPACE
+              value: "false"
+            - name: TS_STATE_DIR
+              value: /var/lib/tailscale
+            - name: TS_KUBE_SECRET
+              value: ""
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
+          volumeMounts:
+            - { name: ts-sock, mountPath: /tmp }
+            # Persist tailscale node state so croft reliably reclaims the `croft`
+            # device name across restarts (mirrors the broker's ts-state subPath).
+            - { name: home, mountPath: /var/lib/tailscale, subPath: ts-state }
+        # 2. The workspace. Long-lived: startup script provisions sshd + the
+        #    operator user + the operator token file, starts sshd, then tail -f.
+        - name: croft
+          image: localhost/nexus-builder:dev
+          imagePullPolicy: Never
+          command: ["/bin/bash", "/etc/croft/startup.sh"]
+          env:
+            # Operator network identity → the nexus broker. NEXUS_TOKEN resolves to
+            # operator/Admin via the broker TokenStore. Also written to a keyfile
+            # path (operator.token) by the startup script for -operator-token-file.
+            - name: NEXUS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: croft-operator-token
+                  key: NEXUS_TOKEN
+            # Broker over the tailnet (publicly-trusted LE cert; no custom CA).
+            - name: CW_SEAM_URL
+              value: https://nexus.tail41686e.ts.net:7888
+            - name: NEXUS_URL
+              value: wss://nexus.tail41686e.ts.net:7888/connect
+            - name: HOME
+              value: /home/operator
+          ports:
+            - { name: ssh, containerPort: 22 }
+            - { name: mosh, containerPort: 60000, protocol: UDP }
+          volumeMounts:
+            - { name: home, mountPath: /home/operator }
+            - { name: ts-sock, mountPath: /tmp }
+            - { name: startup, mountPath: /etc/croft, readOnly: true }
+            - { name: ssh-pubkey, mountPath: /etc/croft-ssh, readOnly: true }
+          # sshd needs a tty-less long life; the script execs `tail -f /dev/null`.
+      volumes:
+        - { name: ts-sock, emptyDir: {} }
+        - name: home
+          persistentVolumeClaim:
+            claimName: croft-home
+        - name: startup
+          configMap:
+            name: croft-startup
+            defaultMode: 0555
+        - name: ssh-pubkey
+          secret:
+            secretName: croft-ssh-pubkey
+            items:
+              - { key: authorized_keys, path: authorized_keys }
+---
+# Startup script: idempotent boot for the croft workspace. Committed (no secrets).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: croft-startup
+  namespace: croft
+data:
+  startup.sh: |
+    #!/bin/bash
+    # croft boot — provision sshd + the operator user + operator-token file, then
+    # hold the pod open. Idempotent: safe to re-run every pod start. HOME=/home/operator
+    # is the PVC; user state (repos, .claude, dotfiles) persists across restarts.
+    set -euo pipefail
+    export DEBIAN_FRONTEND=noninteractive
+
+    log() { echo "croft-startup: $*" >&2; }
+
+    # --- packages (apt cache is ephemeral; re-install is cheap, only on cold layer) ---
+    if ! command -v sshd >/dev/null 2>&1 || ! command -v mosh-server >/dev/null 2>&1; then
+      log "installing openssh-server + mosh"
+      apt-get update -qq
+      apt-get install -y -qq --no-install-recommends openssh-server mosh ca-certificates sudo >/dev/null
+    fi
+    # claude-code (the orchestrator runs `claude` in-pod). npm global; tolerate offline.
+    if ! command -v claude >/dev/null 2>&1; then
+      log "installing claude-code (best-effort)"
+      npm install -g @anthropic-ai/claude-code >/dev/null 2>&1 || log "claude-code install skipped (offline?)"
+    fi
+
+    # --- operator user whose $HOME is the PVC ---
+    if ! id operator >/dev/null 2>&1; then
+      log "creating operator user (home=/home/operator, login shell bash)"
+      # Debian ships a system group `operator` (gid 37); reuse it rather than
+      # letting useradd fail trying to create a same-named group.
+      getent group operator >/dev/null 2>&1 || groupadd operator
+      useradd --home-dir /home/operator --shell /bin/bash --no-create-home \
+        --gid operator operator
+      # passwordless sudo for the operator's own workspace
+      echo 'operator ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/operator
+      chmod 0440 /etc/sudoers.d/operator
+    fi
+    mkdir -p /home/operator
+    chown operator:operator /home/operator
+    # sshd StrictModes refuses pubkey auth if $HOME is group/world-writable; the
+    # PVC mountpoint comes up 0777, so tighten it.
+    chmod 0755 /home/operator
+
+    # --- SSH authorized_keys from the mounted pubkey secret ---
+    install -d -m 0700 -o operator -g operator /home/operator/.ssh
+    install -m 0600 -o operator -g operator /etc/croft-ssh/authorized_keys /home/operator/.ssh/authorized_keys
+    log "authorized_keys installed ($(wc -l < /home/operator/.ssh/authorized_keys) key(s))"
+
+    # --- operator network credential: NEXUS_TOKEN → keyfile path for -operator-token-file ---
+    install -d -m 0700 -o operator -g operator /home/operator/.config/nexus
+    umask 077
+    printf '%s' "${NEXUS_TOKEN:-}" > /home/operator/.config/nexus/operator.token
+    chown operator:operator /home/operator/.config/nexus/operator.token
+    chmod 0600 /home/operator/.config/nexus/operator.token
+    log "operator token written to ~/.config/nexus/operator.token (mode 600)"
+
+    # --- in-cluster kubeconfig for the operator's interactive (SSH) shells ---
+    # kubelet only injects KUBERNETES_SERVICE_HOST into PID1's env, not SSH
+    # sessions, so kubectl would fall back to localhost:8080. Write an explicit
+    # kubeconfig off the automounted SA token + CA so `kubectl` just works for
+    # the operator over SSH. The croft SA is cluster-admin.
+    SA=/var/run/secrets/kubernetes.io/serviceaccount
+    if [ -r "$SA/token" ]; then
+      install -d -m 0700 -o operator -g operator /home/operator/.kube
+      KCFG=/home/operator/.kube/config
+      cat > "$KCFG" <<EOF
+    apiVersion: v1
+    kind: Config
+    clusters:
+    - name: k3s
+      cluster:
+        server: https://kubernetes.default.svc:443
+        certificate-authority: $SA/ca.crt
+    users:
+    - name: croft
+      user:
+        tokenFile: $SA/token
+    contexts:
+    - name: croft
+      context:
+        cluster: k3s
+        user: croft
+    current-context: croft
+    EOF
+      chown operator:operator "$KCFG"
+      chmod 0600 "$KCFG"
+      log "in-cluster kubeconfig written (~/.kube/config → kubernetes.default.svc, SA croft)"
+    fi
+
+    # --- sshd config: pubkey-only, no passwords, no root ---
+    mkdir -p /run/sshd /etc/ssh/sshd_config.d
+    # Persist host keys on the PVC so croft's SSH fingerprint is stable across
+    # pod restarts (else clients hit REMOTE HOST IDENTIFICATION CHANGED).
+    install -d -m 0700 /home/operator/.ssh-hostkeys
+    if ! ls /home/operator/.ssh-hostkeys/ssh_host_* >/dev/null 2>&1; then
+      ssh-keygen -A >/dev/null 2>&1 || true
+      cp -a /etc/ssh/ssh_host_* /home/operator/.ssh-hostkeys/ 2>/dev/null || true
+    else
+      cp -a /home/operator/.ssh-hostkeys/ssh_host_* /etc/ssh/ 2>/dev/null || true
+    fi
+    ssh-keygen -A >/dev/null 2>&1 || true
+    cat > /etc/ssh/sshd_config.d/croft.conf <<'EOF'
+    PasswordAuthentication no
+    PubkeyAuthentication yes
+    PermitRootLogin no
+    KbdInteractiveAuthentication no
+    AllowUsers operator
+    EOF
+    log "starting sshd"
+    /usr/sbin/sshd -e
+
+    # --- hold the pod open ---
+    log "croft up — operator@croft.tail41686e.ts.net (ssh) ready; holding"
+    exec tail -f /dev/null
+---
+# Headless service for the StatefulSet's stable network identity (in-cluster).
+# External SSH/mosh reaches croft over the tailnet (the sidecar), not via this svc.
+apiVersion: v1
+kind: Service
+metadata:
+  name: croft
+  namespace: croft
+spec:
+  clusterIP: None
+  selector:
+    app: croft
+  ports:
+    - { name: ssh, port: 22, targetPort: 22 }
