@@ -1,0 +1,165 @@
+# mason — the Strata deployment engine (M1).
+#
+# Mirrors almanac's deploy shape (a cwb-ca-signed cert via cert-manager, a
+# Deployment of the static binary on scratch, a ClusterIP Service on the gRPC
+# port), plus the pieces the chart doesn't model: mason applies workloads to
+# the cluster itself, so it carries its own ServiceAccount + ClusterRole.
+#
+# RBAC is deliberately narrow: deployments/statefulsets, services, PVCs,
+# configmaps, serviceaccounts (full manage) and pods (read-only). Explicitly
+# NO Secrets — mason never reads or writes Secret objects; secret material
+# flows through almanac/custodian, not the deploy engine.
+#
+# mason runs FAIL-CLOSED on TLS: it will not serve (or dial almanac) without
+# the cwb-ca cert material; MASON_DEV_INSECURE is deliberately UNSET in the
+# cluster. The single mason-tls cert carries BOTH usages: server auth (mason's
+# own gRPC :8086) and client auth (almanac enforces
+# RequireAndVerifyClientCert on the poll dial).
+#
+# MASON_ALMANAC_ORG is "carriedworld" — the interim single org almanac's data
+# actually lives under (the org seeded in almanac's org_seeds table and used
+# by the almanac deploy smoke), NOT mason's compiled default ("cwb").
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mason
+  namespace: cwb
+  labels:
+    app: mason
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mason
+  labels:
+    app: mason
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "persistentvolumeclaims", "configmaps", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mason
+  labels:
+    app: mason
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mason
+subjects:
+  - kind: ServiceAccount
+    name: mason
+    namespace: cwb
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mason-tls
+  namespace: cwb
+spec:
+  secretName: mason-tls
+  commonName: mason
+  dnsNames:
+    - mason
+    - mason.cwb.svc.cluster.local
+  usages:
+    - server auth
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: cwb-ca
+    kind: Issuer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mason
+  namespace: cwb
+  labels:
+    app: mason
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mason
+  template:
+    metadata:
+      labels:
+        app: mason
+    spec:
+      serviceAccountName: mason
+      containers:
+        - name: mason
+          image: localhost/mason:dev
+          imagePullPolicy: Never
+          ports:
+            - name: grpc
+              containerPort: 8086
+          env:
+            - name: MASON_GRPC_ADDR
+              value: ":8086"
+            - name: MASON_ALMANAC_ADDR
+              value: "almanac.cwb.svc.cluster.local:8083"
+            # The org almanac's data lives under (see header).
+            - name: MASON_ALMANAC_ORG
+              value: "carriedworld"
+            - name: MASON_TLS_CERT
+              value: "/etc/mason/tls/tls.crt"
+            - name: MASON_TLS_KEY
+              value: "/etc/mason/tls/tls.key"
+            - name: MASON_TLS_CA
+              value: "/etc/mason/tls/ca.crt"
+            - name: MASON_CLIENT_TLS_CERT
+              value: "/etc/mason/tls/tls.crt"
+            - name: MASON_CLIENT_TLS_KEY
+              value: "/etc/mason/tls/tls.key"
+            - name: MASON_CLIENT_TLS_CA
+              value: "/etc/mason/tls/ca.crt"
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/mason/tls
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: 8086
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 8086
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: tls
+          secret:
+            secretName: mason-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mason
+  namespace: cwb
+  labels:
+    app: mason
+spec:
+  type: ClusterIP
+  selector:
+    app: mason
+  ports:
+    - name: grpc
+      port: 8086
+      targetPort: grpc
+      protocol: TCP
