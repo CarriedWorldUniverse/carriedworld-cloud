@@ -122,6 +122,24 @@ spec:
               value: "http://gemma-ollama.nexus.svc.cluster.local:11434"
             - name: CW_OLLAMA_KEEP_ALIVE
               value: "-1s"
+            # custodian M1: route kind="git" agent credential.fetch to the
+            # custodian pillar (cwb ns) over mTLS. Additive + fail-safe — unset
+            # CUSTODIAN_GRPC_ADDR keeps git (and every other kind) on the local
+            # store (no regression). CUSTODIAN_GRPC_ORG is the interim
+            # management org presented as cwb-org (herald per-agent org binding
+            # is the successor). The client cert is a cwb-ca Certificate
+            # (CN=nexus-broker, client auth) minted in cwb and mirrored into
+            # nexus as the Secret `nexus-broker-custodian-client`.
+            - name: CUSTODIAN_GRPC_ADDR
+              value: "custodian.cwb.svc:8085"
+            - name: CUSTODIAN_GRPC_ORG
+              value: "cwb-admin"
+            - name: CUSTODIAN_TLS_CERT
+              value: "/etc/cwb/custodian-client/tls.crt"
+            - name: CUSTODIAN_TLS_KEY
+              value: "/etc/cwb/custodian-client/tls.key"
+            - name: CUSTODIAN_TLS_CA
+              value: "/etc/cwb/custodian-client/ca.crt"
           envFrom:
             # NEXUS_TOKEN / NEXUS_AUTH_BYPASS / NEXUS_OPERATOR_RPID — created at
             # cutover from the host /etc/nexus/nexus.env (claude.env is dropped).
@@ -132,9 +150,16 @@ spec:
           volumeMounts:
             - { name: ts-certs, mountPath: /certs, readOnly: true }
             - { name: data, mountPath: /var/lib/nexus }
+            - { name: custodian-client-tls, mountPath: /etc/cwb/custodian-client, readOnly: true }
       volumes:
         - { name: ts-sock, emptyDir: {} }
         - { name: ts-certs, emptyDir: {} }
+        # cwb-ca client cert for the broker→custodian mTLS hop. Minted as a
+        # cert-manager Certificate in cwb (CN=nexus-broker, client auth) and
+        # mirrored into nexus (cert-manager Certificates are namespaced).
+        - name: custodian-client-tls
+          secret:
+            secretName: nexus-broker-custodian-client
         - name: data
           persistentVolumeClaim:
             claimName: nexus-broker-data
