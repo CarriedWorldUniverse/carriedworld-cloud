@@ -1,4 +1,5 @@
 # croft (NEX-618) — the operator's persistent, SSH-able workspace IN the cluster.
+# Secret croft-gh-token (GH_TOKEN=<classic PAT, repo scope>) — out-of-band; gh/git auth.
 #
 # croft is the operator's home on the dMon k3s cluster: GPU-adjacent, cluster-API
 # in reach, persistent, and carrying shadow's (the orchestrator's) memory +
@@ -148,6 +149,10 @@ spec:
           image: localhost/nexus-builder:dev
           imagePullPolicy: Never
           command: ["/bin/bash", "/etc/croft/startup.sh"]
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "su operator -s /bin/sh -c 'HOME=/home/operator sh /home/operator/.local/bin/home-sync.sh' 2>/dev/null || true"]
           env:
             # Operator network identity → the nexus broker. NEXUS_TOKEN resolves to
             # operator/Admin via the broker TokenStore. Also written to a keyfile
@@ -164,6 +169,13 @@ spec:
                 secretKeyRef:
                   name: croft-claude-auth
                   key: CLAUDE_CODE_OAUTH_TOKEN
+            # gh/git auth at container level (gh reads GH_TOKEN) so a redeploy is
+            # already authed — no manual `gh auth login` (it can't persist here).
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: croft-gh-token
+                  key: GH_TOKEN
             # Broker over the tailnet (publicly-trusted LE cert; no custom CA).
             - name: CW_SEAM_URL
               value: https://nexus.tail41686e.ts.net:7888
@@ -309,6 +321,14 @@ data:
     EOF
     log "starting sshd"
     /usr/sbin/sshd -e
+
+    # --- git auth: gh as the credential helper (reads GH_TOKEN); reset clears
+    #     the system cw helper so github push works on every boot ---
+    su operator -s /bin/sh -c 'export HOME=/home/operator; git config --global credential.helper ""; git config --global --add credential.helper "!gh auth git-credential"' 2>/dev/null || true
+    # --- home.git versioning: relaunch the 5-min sync loop (scripts live on the
+    #     PVC + are tracked in home.git; preStop does a final commit) ---
+    [ -x /home/operator/.local/bin/home-sync-loop.sh ] && ! pgrep -f home-sync-loop >/dev/null 2>&1 && su operator -s /bin/sh -c 'export HOME=/home/operator; setsid sh /home/operator/.local/bin/home-sync-loop.sh >/dev/null 2>&1 &' 2>/dev/null || true
+    log "git auth via gh/GH_TOKEN; home.git sync loop ensured"
 
     # --- hold the pod open ---
     log "croft up — operator@croft.tail41686e.ts.net (ssh) ready; holding"
