@@ -27,34 +27,32 @@ A self-contained operator workspace container:
 - **Persistent:** a PVC carries `$HOME` — repos, dotfiles, and shadow's copied memory + session history (continuity, so the orchestrator runs from here).
 - **Separate:** its own namespace, distinct from `nexus`/`cwb`. A consumer, isolated.
 
-## Access (ssh now, web later, interchange as the target route)
+## Access — two directions, not one (this is the load-bearing distinction)
 
-croft has **two front doors to the workspace itself** (distinct from CWB's one front door):
-- **SSH — now.** Terminal / mosh / code-remote. Working today.
-- **Web — later.** A web-based console (code-server / web terminal) so a browser is enough. Deferred.
+croft sits **outside** CWB's infrastructure, so its access and CWB's access are separate concerns. Do not conflate them:
 
-**The route those doors *should* take** is through the cloud's boundary — **interchange → nexus → croft** — so the personal cloud has exactly one external surface and croft has none of its own (the `cluster-tailnet-environment` discipline: tailscale = external edge only; internal = cluster DNS). The interim uses what already exists (host as jump / the current path); we converge on the boundary route later, since the host-SSH backup means there's no urgency forcing it.
+| Direction | Path | Rationale |
+|---|---|---|
+| **operator → croft** (reach the workspace) | croft's **own** ingress — SSH now, web later | croft is a separate consumer, not a CWB service. It is entitled to its own front door, the way any external client has its own connectivity. nexus/interchange are **not** in this path. |
+| **croft → CWB** (use the platform) | **through interchange**, as the operator identity | croft is a *consumer* of the personal cloud; interchange is CWB's one door, and croft reaches in through it like any consumer. |
 
-### Target access mechanism (when interchange is the genuine sole ingress)
+**The single-front-door discipline governs CWB, not croft.** "Everything behind interchange, no per-pod identities, internal = cluster DNS" applies to CWB's *own services* (the pillars, the broker) — they hide behind the boundary. croft is *not* one of those services; it lives outside that infrastructure. So croft having its own access surface is correct, not a violation. (Earlier framing had croft *inside* nexus and proposed an `interchange → nexus → croft` route — that was the wrong side of the boundary. nexus never routes *into* croft.)
 
-interchange already is a boundary gateway with an **E2E relay**. Workspace access rides it as an authenticated session stream:
-1. **operator → interchange (public).** Authenticate as operator (herald-rooted long-term); interchange decides *which workspace this identity may reach*.
-2. **interchange → nexus (in-cluster).** nexus applies routing/policy (identity → permitted workspace; the seam that becomes Strata multi-tenancy) and dials croft over cluster DNS.
-3. **nexus → croft.** Session terminates as the operator's shell; bytes relay back out the same chain.
-
-Transport lean: **SSH-over-relay** — keeps stock `ssh`/mosh/VS-Code-remote, reuses croft's sshd; the new piece is an identity-gated stream-relay on interchange + nexus's inward dial. (Alternatives: PTY/websocket terminal, or a brokered tunnel.) Bypass-resistance test: kill every other path (no host SSH, no per-pod identity) and the operator still has croft *because interchange relays it*. Session open/close audited to ledger.
+- **SSH — now.** Terminal / mosh / code-remote. Working today, on croft's own ingress.
+- **Web — later.** A web-based console (code-server / web terminal) so a browser is enough — also croft's own ingress, not a CWB surface.
+- **The cold-start floor stays the host** (`ssh dmonextreme`, below k3s) regardless of croft's access — independent of everything above.
 
 ## Strata generalization
 
-croft is the **first workspace-container primitive**. A Strata instance = the CWB personal cloud **+ zero-or-more workspace containers** (croft-shaped) for its operator/users, all on shared infra, the cloud reached through its one door, each workspace identity-gated and nexus-routed. Build the access pattern once for croft and every tenant inherits "your private cloud has exactly one front door, and it knows who you are." The host-below-k3s remains the universal cold-start floor.
+croft is the **first workspace-container primitive**. A Strata instance = the CWB personal cloud **+ zero-or-more workspace containers** (croft-shaped) — each a *consumer* sitting outside CWB, with its own access surface, reaching the shared personal cloud through interchange as its identity. The product shape: "your private cloud (CWB, one front door) plus your workspaces (yours to reach, theirs to consume it)." The host-below-k3s remains the universal cold-start floor.
 
 ## Status / sequence
 
-- **Now:** croft live (separate ns, operator identity, build-capable incl. self, SSH, persistent + shadow memory). Interim access path.
-- **Next (laters, ordered):** web console surface → the interchange SSH-over-relay route (remove bypasses, interchange becomes the genuine sole ingress) → generalize nexus's identity→workspace policy to org-scoped multi-tenant (Strata).
+- **Now:** croft live (separate ns, operator identity, build-capable incl. self, SSH on its own ingress, persistent + shadow memory). croft → CWB already flows as a consumer (operator auth to the broker).
+- **Next (laters, ordered):** web console surface (croft's own ingress) → harden croft's own access (identity, session policy) → generalize to multi-tenant: many workspace-consumers, each reaching the one CWB through interchange (Strata).
 
 ## Open questions
 
-- Does interchange's E2E-relay primitive carry a raw TCP/SSH stream, or is it message-framed (→ needs a stream mode)?
-- Client side: a `cw ssh croft` / `ProxyCommand` wrapper so stock `ssh` drives the interchange route.
-- Re-auth / session-TTL on long-lived terminals (mosh resumes for days) without dropping the session.
+- croft's *own* access hardening: what gates its SSH/web ingress long-term (the operator credential it already holds; herald-rooted later), and session TTL on long-lived terminals (mosh resumes for days).
+- The croft → CWB consumer path: croft authenticates to interchange as operator — confirm that's the same boundary the external pillars are reached through, and the identity is herald-rooted as that matures.
+- Multi-tenant: how nexus/CWB scopes which consumer-workspace may reach which org's resources (the Strata isolation seam).
