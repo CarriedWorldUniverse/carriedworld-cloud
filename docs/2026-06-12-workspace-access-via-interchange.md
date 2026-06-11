@@ -34,7 +34,10 @@ croft sits **outside** CWB's infrastructure, so its access and CWB's access are 
 | Direction | Path | Rationale |
 |---|---|---|
 | **operator → croft** (reach the workspace) | croft's **own** ingress — SSH now, web later | croft is a separate consumer, not a CWB service. It is entitled to its own front door, the way any external client has its own connectivity. nexus/interchange are **not** in this path. |
-| **croft → CWB** (use the platform) | **through interchange**, as the operator identity | croft is a *consumer* of the personal cloud; interchange is CWB's one door, and croft reaches in through it like any consumer. |
+| **croft → CWB** (consume *org access*) | **through interchange**, authenticating as a **herald org identity** | croft consumes CWB for **org access** — a herald-rooted org identity (the custodian-key-model org-derived identity, not the static NEXUS_TOKEN long-term). |
+| **croft → nexus + agents** (the org's runtime) | *behind* the org access — a consequence of being an admitted org member | nexus (the org's broker) and the agents (aspects) are **org-scoped resources behind CWB org access**. croft reaches them *because* it holds org access, not via a direct raw line. |
+
+**herald is the front; nexus + agents are the org runtime behind it.** What croft gets from CWB is *org access* (a herald org identity); the broker and aspects are reached as a consequence of org membership, not as separate raw endpoints. This is the Strata isolation seam: org A's workspace consumes org A's access and reaches only org A's runtime.
 
 **The single-front-door discipline governs CWB, not croft.** "Everything behind interchange, no per-pod identities, internal = cluster DNS" applies to CWB's *own services* (the pillars, the broker) — they hide behind the boundary. croft is *not* one of those services; it lives outside that infrastructure. So croft having its own access surface is correct, not a violation. (Earlier framing had croft *inside* nexus and proposed an `interchange → nexus → croft` route — that was the wrong side of the boundary. nexus never routes *into* croft.)
 
