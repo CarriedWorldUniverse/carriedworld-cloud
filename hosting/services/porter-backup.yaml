@@ -1,0 +1,176 @@
+# porter-backup — encrypted offsite backups (NEX-625).
+# snapshot → casket multi-recipient (cluster key + operator recovery key) →
+# custodian-brokered Google OAuth → Drive (ciphertext only). Raw manifest:
+# needs hostPath (ro) + curated-secret RBAC the convention chart doesn't model.
+#
+# Out-of-band (NEVER in git):
+#   - Secret porter/porter-cluster-key   (cluster recipient private key)
+#   - custodian credential kind=oauth name=google-drive (org cwb-admin)
+#   - the operator recovery key lives OFF-MACHINE
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: porter
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: porter-backup
+  namespace: porter
+---
+# Curated secret reads — get-by-name only, per namespace. The backup pod is
+# the one component that must hold the crown jewels; everything else is denied.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: porter-backup-secrets
+  namespace: cwb
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames:
+      - almanac-org-seed
+      - custodian-org-seed
+      - herald-secrets
+      - cairn-secrets
+      - cwb-internal-ca
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: porter-backup-secrets
+  namespace: cwb
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: porter-backup-secrets }
+subjects: [{ kind: ServiceAccount, name: porter-backup, namespace: porter }]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: porter-backup-secrets
+  namespace: croft
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames:
+      - croft-operator-token
+      - croft-claude-auth
+      - croft-gh-token
+      - croft-ssh-pubkey
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: porter-backup-secrets
+  namespace: croft
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: porter-backup-secrets }
+subjects: [{ kind: ServiceAccount, name: porter-backup, namespace: porter }]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: porter-backup-secrets
+  namespace: nexus
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames:
+      - nexus-broker-env
+      - aspect-keyfile-anvil
+      - aspect-keyfile-harrow
+      - aspect-keyfile-keel
+      - aspect-keyfile-maren
+      - aspect-keyfile-plumb
+      - aspect-keyfile-shadow
+      - observer-keyfile
+      - lynxai-env
+      - hosting-git-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: porter-backup-secrets
+  namespace: nexus
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: porter-backup-secrets }
+subjects: [{ kind: ServiceAccount, name: porter-backup, namespace: porter }]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: porter-backup-secrets
+  namespace: porter
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames:
+      - porter-cluster-key
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: porter-backup-secrets
+  namespace: porter
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: porter-backup-secrets }
+subjects: [{ kind: ServiceAccount, name: porter-backup, namespace: porter }]
+---
+# client cert for the custodian mTLS hop
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: porter-backup-client
+  namespace: porter
+spec:
+  secretName: porter-backup-client-tls
+  issuerRef:
+    name: cwb-ca
+    kind: Issuer
+  commonName: porter-backup
+  usages: ["client auth"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: porter-backup
+  namespace: porter
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: porter-backup }
+  template:
+    metadata:
+      labels: { app: porter-backup }
+    spec:
+      serviceAccountName: porter-backup
+      containers:
+        - name: porter-backup
+          image: localhost/porter-backup:dev
+          imagePullPolicy: Never
+          args: ["sync"]
+          env:
+            - { name: PORTER_ALMANAC_GRPC_ADDR, value: "almanac.cwb.svc.cluster.local:8083" }
+            - { name: PORTER_ALMANAC_PARAM, value: "cwb/porter/backup/sources" }
+            - { name: PORTER_DRIVE_FOLDER, value: "CarriedWorld-Porter/backups" }
+            - { name: PORTER_INTERVAL, value: "6h" }
+            - name: PORTER_RECIPIENTS
+              value: "nkRv85B3NZCIPisbTAR5xe/Ru8dIq9TcsMs2Lf0dLW8=,GCIrPC3XNio56jGuAO6/x+h8uZ7j35iVvNJZT+oqz0M="
+            - { name: CUSTODIAN_GRPC_ADDR, value: "custodian.cwb.svc.cluster.local:8085" }
+            # one org scopes BOTH the custodian bundle and the almanac param read
+            - { name: CUSTODIAN_ORG, value: "07244ac5-1fbd-4786-9301-a925f4241306" }
+            - { name: PORTER_TLS_CERT, value: /etc/porter/tls/tls.crt }
+            - { name: PORTER_TLS_KEY, value: /etc/porter/tls/tls.key }
+            - { name: PORTER_TLS_CA, value: /etc/porter/tls/ca.crt }
+          volumeMounts:
+            - { name: hoststorage, mountPath: /hoststorage, readOnly: true }
+            - { name: tls, mountPath: /etc/porter/tls, readOnly: true }
+            - { name: work, mountPath: /work }
+      volumes:
+        - name: hoststorage
+          hostPath: { path: /var/lib/rancher/k3s/storage, type: Directory }
+        - name: tls
+          secret: { secretName: porter-backup-client-tls }
+        - name: work
+          emptyDir: { sizeLimit: 8Gi }
