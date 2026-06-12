@@ -46,14 +46,54 @@ pillar checks its own scope strings).
 6. **Discoverability.** cw caps / an endpoint listing the tree; atlas/UI can
    render it; the grant verb validates against it.
 
-## Herald is the capability authority (operator 2026-06-12)
+## Set at the service, resolved through herald identity (operator 2026-06-12)
 
-Herald HOLDS the capability vocabulary and ENCODES the granted set into the
-token; ledger/cairn/custodian/etc. are pure ENFORCERS of what herald encoded
-— they never invent or store capability truth, they read the verified token
-and honor it. So the registry ships in herald (or a herald-owned shared lib),
-and the grant verb is herald minting capability claims. One authority defines
-+ grants; every pillar enforces locally with no callback.
+**CORRECTION to an earlier over-centralized framing.** Herald does NOT stamp
+every grant into the token. The split (the GitHub / Kubernetes / AWS-IAM
+pattern — identity central + travels; authorization set at the resource):
+
+- **Herald carries IDENTITY** (verified subject, org, kind=ai, owner) **and
+  owns the capability VOCABULARY** — the standardized permission language so
+  every pillar means the same thing by read/write/admin.
+- **The service HOLDS the grants and RESOLVES them against the herald
+  identity.** Custodian knows who created/may-read each credential; cairn
+  knows who has write on a repo; ledger who admins a project. Grant state
+  lives with the resource's owning service; at check time the service asks
+  "what can THIS herald identity do HERE" against its own records. The token
+  answers WHO; the service answers WHAT-HERE. Tokens stay small; herald is
+  never an omniscient permission DB.
+
+This makes the custodian rules (prior section) fall out naturally rather than
+being special-cased.
+
+**The line to draw — DECIDED (operator 2026-06-12, forced by JWT size: a
+token is ~4-8KB and rides every request, so it CANNOT carry the world).**
+Metaphor: the token is a PASSPORT; each service runs its own border control
+with its own guest list keyed by passport.
+- **In the token (bounded identity envelope):** sub, org, kind (human/ai/
+  service), owner, the COARSE governance roles (platform-admin, org-admin),
+  org/product membership. A handful of claims; stable; herald-owned. Token
+  size is a function of WHO YOU ARE, never of WHAT EXISTS — a thousand repos
+  add zero bytes.
+- **Service-resolved (unbounded, per-resource, ownership):** everything else
+  — cairn repo collaborators, custodian per-credential owner+read lists,
+  ledger project roles — resolved at the owning service against the token
+  identity, from the service's own grant store.
+- **Revocation:** fine-grained (service-resolved) is INSTANT (next call hits
+  the live store); coarse (token-carried) is bounded by the 10-min TTL —
+  fine, governance roles change rarely. Another reason fine-grained must NOT
+  be token-baked.
+
+**Grant verbs become per-service** (refines NEX-637): "grant croft
+org-admin" is a herald op; "grant alice write on repo X" is a CAIRN op — uses
+herald's vocabulary, addresses the grantee BY herald identity, but the grant
+is stored in cairn. Not one `cw human grant` — herald-grants for governance +
+per-service grants (`cw cairn grant`, `cw custodian share`) that all resolve
+grantees through herald.
+
+**The cwb-client interceptor (NEX-634) is the seam**: verify token →
+establish herald identity in ctx → service's own authz resolves against it.
+Interceptor does IDENTITY; service does AUTHORIZATION.
 
 ## Two access models, not one (operator 2026-06-12, via custodian)
 
