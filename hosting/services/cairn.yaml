@@ -87,8 +87,8 @@ spec:
             secretKeyRef:
               key: ssh_host_key
               name: cairn-secrets
-        image: ghcr.io/carriedworlduniverse/cairn:main
-        imagePullPolicy: Always
+        image: ghcr.io/carriedworlduniverse/cairn:sha-ae4e9a1@sha256:9237b630412c32767e3d457dbfa3eed4522e04818e92d608b3d6792abb5ec88e
+        imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
           httpGet:
