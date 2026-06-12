@@ -143,10 +143,10 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - { name: grpc, containerPort: 8089 }
-            - { name: https, containerPort: 8443 }
+            - { name: https, containerPort: 443 }
           env:
             - { name: ATLAS_GRPC_ADDR, value: ":8089" }
-            - { name: ATLAS_HTTP_ADDR, value: ":8443" }
+            - { name: ATLAS_HTTP_ADDR, value: ":443" }   # 443: the herald-registered redirect URL has no port
             # server identity (StrataService mTLS, cwb-ca)
             - { name: ATLAS_TLS_CERT, value: /etc/cwb/tls/tls.crt }
             - { name: ATLAS_TLS_KEY, value: /etc/cwb/tls/tls.key }
