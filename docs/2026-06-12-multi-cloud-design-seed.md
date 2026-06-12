@@ -121,6 +121,44 @@ consumer). Remote masons PUSH status home through the dock (strata-ingest
 write or almanac status keys); atlas reads the aggregate. Reads become
 reports at the boundary.
 
+## Other people's clouds: tenancy now, federation later
+
+Someone ELSE building a personal cloud who wants to connect to the central
+core. Two sequential models:
+
+1. **Tenancy — their hardware, your brain.** They get an ORG in central
+   herald (the org boundary was always the tenancy line; the test-org debris
+   proves the mechanics). Their human enrolls in their org (satchel +
+   passkey); their machines are agents with THEIR responsible_human; their
+   declarations under their org's almanac prefix; secrets org-scoped in
+   custodian; their mason pulls through the same loading dock. Every rule in
+   this doc applies unchanged — none of it ever said "croft", only "the
+   org's responsible human." New work: org-scoped tenancy in mason's
+   declaration source, tenant onboarding (satchel M2's audience), quotas/
+   billing eventually. This is the personal-cloud product thesis: bring your
+   own box, rent the brain.
+   **A cloud's mason belongs to the org that owns the cloud — no
+   exceptions.** Load-bearing: isolation by identity not path-convention
+   (the org claim in mason's token IS the wall around its declarations and
+   secrets), accountability (responsible_human = their human), blast radius
+   (their key ⇒ their org only), lifecycle sovereignty (they rotate/revoke
+   their own machines). A tenant mason needs NOTHING host-level: org-scoped
+   reads + purely local cluster RBAC + status to its own org's keys. The
+   same rule covers the operator's own fleet (carriedworld's boxes →
+   carriedworld's masons).
+2. **Federation — their brain, connected.** A sovereign core (their own
+   pillars) cross-trusting yours. The seam already exists: herald's
+   RegisterIssuer + EnrollFederatedIdentity + the federated grant are
+   issuer-to-issuer trust machinery; interchange's door would check "a
+   herald I trust" instead of "my herald." Heavy design — deferred.
+
+**Honest trust statement + the exit ramp**: a tenant trusts the host with
+identity and brokered secrets; the e2e satchel is ciphertext to the host but
+cairn/ledger contents are host-readable today — never pretend otherwise. The
+sovereignty dial must turn: org-scoped EXPORT (tenant migrates to their own
+core, re-attaches via federation) is the escape hatch that keeps the offer
+honest. Design nothing that welds a tenant's data to the host's pillars.
+
 ## Fit with existing direction
 
 Matches the hosting direction (portable k8s-native; flat-rate k3s boxes —
