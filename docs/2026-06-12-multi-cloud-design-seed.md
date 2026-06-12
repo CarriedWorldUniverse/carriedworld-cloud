@@ -147,16 +147,46 @@ core. Two sequential models:
    same rule covers the operator's own fleet (carriedworld's boxes →
    carriedworld's masons).
 
-   **Applied to the CURRENT layout** (decided 2026-06-12): today's single
-   mason has NO org — it's a mesh citizen (mTLS + self-asserted headers).
-   The doctrine splits it into TWO masons when mason gains herald identity:
-   a **platform mason** (org cwb-admin; reconciles the core itself — the
-   M2/NEX-624 pillars-as-declarations work; also brings herald's manifest
-   into GitOps) and a **tenant mason** (org carriedworld; nexus + croft
-   namespaces). Don't split physically before the identity layer lands —
-   but spec NEX-624 as the cwb-admin mason from day one, and adopt
-   org-scoped declaration prefixes (orgs/<org>/clouds/<cloud>/apps/...)
-   BEFORE more declarations accumulate.
+   **Refined (operator, same evening): mason is a shared pillar, not an
+   org citizen — ONE mason per cluster, multi-tenant by GRANTS** (matching
+   how almanac/custodian are shared with org-scoped enforcement). The
+   authority chain:
+   1. **Cloud registration** — every cluster has an owning org (dMon's
+      cluster: cwb-admin; a tenant box: the tenant's org).
+   2. **Slice delegation** — on shared clusters the owner delegates
+      namespaces to orgs (cwadmin → nexus+croft to carriedworld). On a
+      wholly-owned box: one org, whole cluster, trivially.
+   3. **Deployment authority** — org members with app:write declare; mason
+      enforces that org X's declarations only land in X's registered slice
+      (namespace allowlist = the wall).
+   Pillars-as-declarations (M2/NEX-624) = cwb-admin's declarations for
+   cwb-admin's slice — same reconciler, separated by grants; brings
+   herald's orphaned manifest into GitOps. Spec M2 this way; adopt
+   org-scoped prefixes (orgs/<org>/clouds/<cloud>/apps/...) before more
+   declarations accumulate.
+
+   **Sovereignty invariant — a tenant cloud is structurally immune to host
+   mutation: authority over a cloud roots in keys its owner carries, not in
+   records the host stores.** The host's three powers, each killed:
+   - mutate the authority map → **local pin**: owning org + owner public
+     key live in mason's local config from the join bundle (owner-written,
+     never host-fetched); delegations are accepted only from the pinned
+     owner.
+   - mutate declaration content → **owner-signed declarations**: casket
+     signatures verified against the pinned owner key chain before apply;
+     almanac is untrusted STORAGE, not authority. Tamper = refuse + alarm.
+   - mint identities in the tenant org (host controls herald) → signing
+     keys must be endorsed by the owner's key (derive-by-name chain), not
+     merely present in org records.
+   Residual host power, stated honestly: WITHHOLD (DoS, revocation, closed
+   door) → tenant degrades to autonomy on last-good signed state; remedy is
+   the exit ramp (export → own core → federate). The host can starve a
+   tenant; it can never command a tenant's hardware. Symmetric for the
+   operator's own boxes (cwadmin's key pins the central cluster; croft's
+   pins theirs). M2.1 ships the signature block in the declaration envelope
+   and authority-map schema from day one (unsigned accepted on the central
+   single-operator cluster); sovereignty later = key distribution, not
+   format migration.
 2. **Federation — their brain, connected.** A sovereign core (their own
    pillars) cross-trusting yours. The seam already exists: herald's
    RegisterIssuer + EnrollFederatedIdentity + the federated grant are
