@@ -99,6 +99,28 @@ through the door, with a herald identity. There is no second path.**
   push, if ever needed, arrives via interchange's inbound-webhook respec —
   through the door's machinery, never a hole punched toward a remote box.
 
+## How mason talks home: the lobby and the loading dock
+
+Mason goes **through interchange, always** — never direct (the mTLS mesh is
+intra-core trust fabric and never spans sites), never via a core-side relay
+(relays/outposts are remote-side egress plumbing; mason needs none and may
+itself host outpost duties for its cloud later). It dials home as its herald
+AGENT identity and reads its declaration prefix.
+
+The refinement: interchange grows two door CLASSES, not two boundaries —
+- **the lobby**: humans + app consumers (bearer tokens, REST, browser
+  sessions);
+- **the loading dock**: platform machine traffic (masons, porters — agent
+  identity, long-lived streams, machine scopes, its own rate/QoS so
+  reconcilers are never starved by app traffic).
+One wall, two doors, one audit log.
+
+**Status inverts at the boundary**: central atlas dials local mason today
+(in-mesh read) — forbidden toward remote clouds (core never dials a
+consumer). Remote masons PUSH status home through the dock (strata-ingest
+write or almanac status keys); atlas reads the aggregate. Reads become
+reports at the boundary.
+
 ## Fit with existing direction
 
 Matches the hosting direction (portable k8s-native; flat-rate k3s boxes —
