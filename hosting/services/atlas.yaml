@@ -142,7 +142,7 @@ spec:
       containers:
         # 1. atlas itself — collector loop + StrataService gRPC + web map.
         - name: atlas
-          image: ghcr.io/carriedworlduniverse/atlas:sha-7f94f01@sha256:8d40f3b6d0f8173274dbb356cbfc6fa5ba39d73d4f7bfdc16262a110c2248a1e
+          image: ghcr.io/carriedworlduniverse/atlas:sha-e8ec8eb@sha256:bb044607fcbe00c0ffe9b0442d2f0d77ac2fab22c7f7f20ecf4614f12894ae04
           imagePullPolicy: IfNotPresent
           ports:
             - { name: grpc, containerPort: 8089 }
