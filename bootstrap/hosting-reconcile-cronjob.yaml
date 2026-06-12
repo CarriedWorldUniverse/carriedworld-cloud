@@ -15,7 +15,7 @@ rules:
     resources: ["deployments", "statefulsets"]
     verbs: ["get","list","watch","create","update","patch"]
   - apiGroups: [""]
-    resources: ["services","persistentvolumeclaims","configmaps","serviceaccounts"]
+    resources: ["services","persistentvolumeclaims","configmaps","serviceaccounts","namespaces"]
     verbs: ["get","list","watch","create","update","patch"]
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles","rolebindings","clusterroles","clusterrolebindings"]
