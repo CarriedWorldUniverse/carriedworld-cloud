@@ -35,6 +35,7 @@ flowchart TB
 
         mason["mason<br/>deploys & upgrades"]
         porter["porter<br/>backups"]
+        atlas["atlas<br/>the live map"]
     end
 
     edge --> herald
@@ -70,10 +71,16 @@ flowchart TB
 > the apps real, interchange is the door in, porter backs it all up — with
 > casket encrypting throughout.
 
-## Where this is going
+## The live version
 
-This static map is for *understanding*. The **live** version — a read-only
-"map view" of the *running* cloud (what's up, what version, health, what's
-connected to what) — is the first job of the thin UI in the control-plane
-design: **comprehension before operation.** The CLI/MCP operate; the map lets
-you *see*.
+This static map is for *understanding the shape*. The **live** version is
+**atlas** — https://atlas.tail41686e.ts.net (herald login): the running cloud
+drawn as namespace regions (CWB the platform on the left; nexus and croft as
+tenant consumers on the right), every workload lit by real state — up /
+degraded / down / dormant-on-purpose, the version actually running, mason's
+sync phase, and porter's backup clock. Same read-only state is available to
+machines at the edge: `GET /atlas/api/strata/state`.
+
+**Comprehension before operation:** the CLI/MCP operate; the map lets you
+*see*. The map's detail panel reserves the spot where operating verbs land
+next — the window becomes the door to the cockpit.
