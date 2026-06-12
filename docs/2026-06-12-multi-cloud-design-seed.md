@@ -77,6 +77,28 @@ brains.
 - interchange isolation step (own namespace + NetworkPolicies + own tailnet
   identity) — the rehearsal for any later physical split.
 
+## Remote consumers (workload → core), not just mason → core
+
+**The org is location-blind: everything that isn't the core reaches the core
+through the door, with a herald identity. There is no second path.**
+
+- A new box with a new consumer of an existing org needs exactly two things:
+  a network route to the door (the box/cluster joins the tailnet — pods do
+  NOT individually run tailscale; cluster DNS / hostAlias maps the edge name)
+  and an enrolled identity (an agent in the org, responsible_human = the
+  operator, via the join-bundle flow). Nothing else changes anywhere.
+- Consumption is identical to local consumers: gateway prefix + herald bearer
+  (the atlas strata route is the template).
+- **Outpost** (the nexus design concept) = the per-cloud doorway home. In v1
+  the tailnet membership IS the outpost. A dedicated relay component (single
+  egress, connection reuse, token caching, cloud-scoped credential custody)
+  is a legitimate later OPTIMIZATION, not architecture — addable without
+  model change because everything already funnels through one logical door.
+- **The core never dials a consumer.** Remote pods reach out: poll, or hold
+  outbound websockets (the aspect↔broker pattern). Genuine core→consumer
+  push, if ever needed, arrives via interchange's inbound-webhook respec —
+  through the door's machinery, never a hole punched toward a remote box.
+
 ## Fit with existing direction
 
 Matches the hosting direction (portable k8s-native; flat-rate k3s boxes —
