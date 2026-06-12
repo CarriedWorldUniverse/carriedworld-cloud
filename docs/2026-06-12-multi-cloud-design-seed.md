@@ -4,6 +4,15 @@
 **Status:** direction agreed with operator; seed for a proper brainstorm when a
 real second machine exists. Nothing here is build-now.
 
+**Deferral confirmed (operator, end of session):** the two current clouds
+(the cwb core + the carriedworld tenant space) are controlled fine by the
+current setup (single mason + committed manifests/reconcile CronJob). The
+grants/authority-map/signed-declaration machinery in this doc ACTIVATES on
+either trigger: (a) a second physical machine joins, or (b) a first external
+tenant org wants to attach hardware. Until then the live org-and-auth work is
+NEX-627 (enrollment verb), NEX-628 (satchel M1), passkeys, and org
+housekeeping — not mason.
+
 ## The one-line model
 
 **CWB's brain stays singular; its hands distribute.** The platform is the OS,
