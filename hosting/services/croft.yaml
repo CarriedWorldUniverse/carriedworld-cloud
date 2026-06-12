@@ -114,6 +114,11 @@ spec:
         app: croft
     spec:
       serviceAccountName: croft
+      # the tailnet edge name doesn't resolve via cluster DNS (no tailscale on
+      # this pod) — alias it to the interchange-gateway LB (broker pattern)
+      hostAliases:
+        - ip: "192.168.143.133"
+          hostnames: ["dmonextreme.tail41686e.ts.net"]
       # The operator user's home is the PVC; sshd runs as the operator user.
       containers:
         # 1. Tailnet identity (kernel mode → the pod's sshd :22 + mosh are
@@ -228,7 +233,7 @@ data:
     if ! command -v sshd >/dev/null 2>&1 || ! command -v mosh-server >/dev/null 2>&1; then
       log "installing openssh-server + mosh"
       apt-get update -qq
-      apt-get install -y -qq --no-install-recommends openssh-server mosh tmux lynx ca-certificates sudo >/dev/null
+      apt-get install -y -qq --no-install-recommends openssh-server mosh tmux lynx dbus gnome-keyring ca-certificates sudo >/dev/null
     fi
     # claude-code (the orchestrator runs `claude` in-pod). npm global; tolerate offline.
     # This runs as root: keep root's npm cache off the PVC home (root-owned files
