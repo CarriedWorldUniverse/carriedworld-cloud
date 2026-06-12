@@ -1,25 +1,21 @@
 # porter-backup — encrypted offsite backups (NEX-625).
 # snapshot → casket multi-recipient (cluster key + operator recovery key) →
 # custodian-brokered Google OAuth → Drive (ciphertext only). Raw manifest:
-# needs hostPath (ro) + curated-secret RBAC the convention chart doesn't model.
+# needs hostPath (ro) + curated cross-namespace secret RBAC the convention
+# chart doesn't model. Runs in cwb (the cwb-ca Issuer is namespace-scoped;
+# porter is platform infra alongside the other pillars).
 #
 # Out-of-band (NEVER in git):
-#   - Secret porter/porter-cluster-key   (cluster recipient private key)
-#   - custodian credential kind=oauth name=google-drive (org cwb-admin)
+#   - Secret cwb/porter-cluster-key   (cluster recipient private key)
+#   - custodian credential kind=oauth name=google-drive
 #   - the operator recovery key lives OFF-MACHINE
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: porter
----
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: porter-backup
-  namespace: porter
+  namespace: cwb
 ---
-# Curated secret reads — get-by-name only, per namespace. The backup pod is
-# the one component that must hold the crown jewels; everything else is denied.
+# cwb secrets (crown jewels) + porter's own cluster key — get-by-name only
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -35,6 +31,7 @@ rules:
       - herald-secrets
       - cairn-secrets
       - cwb-internal-ca
+      - porter-cluster-key
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -42,7 +39,7 @@ metadata:
   name: porter-backup-secrets
   namespace: cwb
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: porter-backup-secrets }
-subjects: [{ kind: ServiceAccount, name: porter-backup, namespace: porter }]
+subjects: [{ kind: ServiceAccount, name: porter-backup, namespace: cwb }]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -65,7 +62,7 @@ metadata:
   name: porter-backup-secrets
   namespace: croft
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: porter-backup-secrets }
-subjects: [{ kind: ServiceAccount, name: porter-backup, namespace: porter }]
+subjects: [{ kind: ServiceAccount, name: porter-backup, namespace: cwb }]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -94,34 +91,13 @@ metadata:
   name: porter-backup-secrets
   namespace: nexus
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: porter-backup-secrets }
-subjects: [{ kind: ServiceAccount, name: porter-backup, namespace: porter }]
+subjects: [{ kind: ServiceAccount, name: porter-backup, namespace: cwb }]
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: porter-backup-secrets
-  namespace: porter
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get"]
-    resourceNames:
-      - porter-cluster-key
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: porter-backup-secrets
-  namespace: porter
-roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: porter-backup-secrets }
-subjects: [{ kind: ServiceAccount, name: porter-backup, namespace: porter }]
----
-# client cert for the custodian mTLS hop
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: porter-backup-client
-  namespace: porter
+  namespace: cwb
 spec:
   secretName: porter-backup-client-tls
   issuerRef:
@@ -134,7 +110,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: porter-backup
-  namespace: porter
+  namespace: cwb
 spec:
   replicas: 1
   strategy: { type: Recreate }

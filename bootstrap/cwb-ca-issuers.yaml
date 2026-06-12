@@ -1,0 +1,41 @@
+# cwb-ca-issuers — the trust root for the whole platform's mTLS.
+# Apply ONCE after cert-manager is installed, BEFORE any pillar (every
+# service cert chains to cwb-ca). cert-manager mints all of this; no key
+# material is in git. Chain: cwb-selfsigned -> cwb-internal-ca (CA cert)
+# -> cwb-ca Issuer -> every <svc>-tls. Extracted from live 2026-06-12.
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: cwb-selfsigned
+  namespace: cwb
+spec:
+  selfSigned: {}
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cwb-internal-ca
+  namespace: cwb
+spec:
+  commonName: cwb-internal-ca
+  isCA: true
+  issuerRef:
+    kind: Issuer
+    name: cwb-selfsigned
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  secretName: cwb-internal-ca
+
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: cwb-ca
+  namespace: cwb
+spec:
+  ca:
+    secretName: cwb-internal-ca
+

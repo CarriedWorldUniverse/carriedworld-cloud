@@ -1,0 +1,132 @@
+# commonplace — the CWB knowledge-store pillar. Extracted from live cluster
+# 2026-06-12 (was cluster-state-only).
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: commonplace-tls
+  namespace: cwb
+spec:
+  dnsNames:
+  - commonplace.cwb.svc
+  - commonplace.cwb.svc.cluster.local
+  - commonplace
+  issuerRef:
+    kind: Issuer
+    name: cwb-ca
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  secretName: commonplace-tls
+  usages:
+  - server auth
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: commonplace-data
+  namespace: cwb
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-path
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: commonplace
+  namespace: cwb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: commonplace
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: commonplace
+    spec:
+      containers:
+      - env:
+        - name: COMMONPLACE_GRPC_ADDR
+          value: :8101
+        - name: COMMONPLACE_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: COMMONPLACE_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: COMMONPLACE_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        - name: COMMONPLACE_ADDR
+          value: :8101
+        - name: COMMONPLACE_DB
+          value: /var/lib/cwb/commonplace.db
+        - name: COMMONPLACE_EMBED_PROVIDER
+          value: ollama
+        - name: COMMONPLACE_EMBED_URL
+          value: http://192.168.143.133:11434
+        - name: COMMONPLACE_EMBED_MODEL
+          value: nomic-embed-text
+        - name: COMMONPLACE_EMBED_DIM
+          value: '768'
+        image: localhost/commonplace:dev
+        imagePullPolicy: Never
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          successThreshold: 1
+          tcpSocket:
+            port: 8101
+          timeoutSeconds: 1
+        name: commonplace
+        ports:
+        - containerPort: 8101
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: 8101
+          timeoutSeconds: 1
+        resources: {}
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: tls
+          readOnly: true
+        - mountPath: /var/lib/cwb
+          name: data
+      volumes:
+      - name: tls
+        secret:
+          defaultMode: 420
+          secretName: commonplace-tls
+      - name: data
+        persistentVolumeClaim:
+          claimName: commonplace-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: commonplace
+  namespace: cwb
+spec:
+  ports:
+  - name: http
+    port: 8101
+    protocol: TCP
+    targetPort: http
+  selector:
+    app: commonplace
+  type: ClusterIP
+
