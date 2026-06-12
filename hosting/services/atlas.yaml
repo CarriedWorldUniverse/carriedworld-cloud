@@ -19,6 +19,10 @@ kind: ServiceAccount
 metadata:
   name: atlas
   namespace: cwb
+# GHCR packages are private — pull via the cwb ghcr-pull dockerconfigjson
+# secret (out-of-band, same one the other pillar SAs carry).
+imagePullSecrets:
+  - name: ghcr-pull
 ---
 # Read-only workload visibility — deployments/statefulsets only, NO pods,
 # NO secrets, NO write verbs. Bound per-namespace below (cwb, nexus, croft).
