@@ -1,0 +1,62 @@
+# porter backup sources — the operator principle: anything needed to bring the
+# platform back up that we can't get out of repos. Applied to almanac at
+# cwb/porter/backup/sources (org = the herald org id); the file here is the
+# source of truth — re-apply on change.
+# Paths are as the porter-backup pod sees them (/hoststorage = ro hostPath of
+# /var/lib/rancher/k3s/storage).
+- name: secrets
+  type: secrets
+  secrets:
+    - { ns: cwb, name: almanac-org-seed }
+    - { ns: cwb, name: custodian-org-seed }
+    - { ns: cwb, name: herald-secrets }
+    - { ns: cwb, name: cairn-secrets }
+    - { ns: cwb, name: cwb-internal-ca }
+    - { ns: croft, name: croft-operator-token }
+    - { ns: croft, name: croft-claude-auth }
+    - { ns: croft, name: croft-gh-token }
+    - { ns: croft, name: croft-ssh-pubkey }
+    - { ns: nexus, name: nexus-broker-env }
+    - { ns: nexus, name: aspect-keyfile-anvil }
+    - { ns: nexus, name: aspect-keyfile-harrow }
+    - { ns: nexus, name: aspect-keyfile-keel }
+    - { ns: nexus, name: aspect-keyfile-maren }
+    - { ns: nexus, name: aspect-keyfile-plumb }
+    - { ns: nexus, name: aspect-keyfile-shadow }
+    - { ns: nexus, name: observer-keyfile }
+    - { ns: nexus, name: lynxai-env }
+    - { ns: nexus, name: hosting-git-token }
+    - { ns: porter, name: porter-cluster-key }
+- name: almanac
+  type: sqlite
+  path: /hoststorage/pvc-a7ec5248-be26-49e4-b787-072410af711e_cwb_almanac-data/almanac.db
+- name: custodian
+  type: sqlite
+  path: /hoststorage/pvc-71b3fcd2-ab7f-48ac-a9d5-3ed3e56da194_cwb_custodian-data/custodian.db
+- name: herald
+  type: sqlite
+  path: /hoststorage/pvc-fd79af3a-eda8-43d8-a71c-62d7d47975ac_cwb_herald-data/herald.db
+- name: ledger
+  type: sqlite
+  path: /hoststorage/pvc-039cf2f0-cd1c-43d0-9860-8b381ffde3c1_cwb_ledger-data/ledger.db
+- name: cairn-db
+  type: sqlite
+  path: /hoststorage/pvc-e34ae563-c8ad-4826-8a03-dd25ed8a149b_cwb_cairn-data/cairn.db
+- name: cairn-repos
+  type: tar
+  path: /hoststorage/pvc-e34ae563-c8ad-4826-8a03-dd25ed8a149b_cwb_cairn-data/repos
+- name: sqld
+  type: tar
+  path: /hoststorage/pvc-6fc549b0-f98d-4cb9-b5b5-c560e3efd8ec_cwb_sqld-data/iku.db
+- name: croft-home
+  type: tar
+  path: /hoststorage/pvc-5758965b-92b8-4003-9af3-70b03bc73936_croft_croft-home
+  excludes:
+    - "src/**"         # re-clonable repo caches — excluded by the operator principle
+    - "work/**"
+    - "go/**"
+    - ".cache/**"
+    - ".npm/**"
+    - ".local/share/claude/**"   # reinstallable
+    - "shadow/porter-recovery.key"        # NEVER: decrypts these very backups
+    - "shadow/google_oauth_client.json"   # re-creatable in Google console
