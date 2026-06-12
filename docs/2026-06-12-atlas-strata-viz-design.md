@@ -122,12 +122,16 @@ goes blank during an incident is useless precisely when it matters.
 
 ## Web layer
 
-**Auth** — OIDC authorization-code flow against herald's HTTP-OIDC face.
-atlas is a registered OIDC client; the callback sets an HttpOnly+Secure
-session cookie; no session → redirect to herald login. The herald token is
-retained server-side in the session — this is the identity seam v2 writes
-ride on. Failures fail closed: herald down → login page with the error, no
-anonymous fallback.
+**Auth** — OIDC authorization-code flow (+PKCE) against herald. Herald's
+HTTP-OIDC face is token-endpoint-only today (jwt-bearer/password/refresh
+grants); the authorization-code flow is **new herald work that lands first**
+— it is the hardening path herald's own design names, and the foundation for
+every future human web surface (operator decision 2026-06-12). atlas is then
+a registered OIDC client; the callback sets an HttpOnly+Secure session
+cookie; no session → redirect to herald login. The herald token is retained
+server-side in the session — this is the identity seam v2 writes ride on.
+Failures fail closed: herald down → login page with the error, no anonymous
+fallback.
 
 **Serving** — page assets `go:embed`ed in the atlas binary (platform
 pattern: one image, no runtime asset dependencies). Vanilla HTML/CSS/JS, one
