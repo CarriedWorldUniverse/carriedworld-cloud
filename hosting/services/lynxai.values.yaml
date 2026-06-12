@@ -2,7 +2,7 @@ name: lynxai
 namespace: nexus
 kind: Deployment
 strategy: Recreate
-image: localhost/lynxai:dev
+image: ghcr.io/carriedworlduniverse/lynxai:main
 env:
   LYNXAI_DATA_DIR: /data
 # LYNXAI_LLM_API_KEY (DeepSeek, /extract LLM) — Secret created out-of-band:

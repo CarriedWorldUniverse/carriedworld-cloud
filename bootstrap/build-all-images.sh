@@ -9,9 +9,9 @@
 # Each image: podman build -f <containerfile> -t localhost/<img>:dev <repo>,
 # then `podman save | k3s ctr images import -`.
 #
-# Reproducibility note (NEX-625 / Layer 2): publishing these to a registry
-# (GHCR) in CI would turn this from "build 14 images" into "pull 14 images".
-# Until then, this script is the canonical build path.
+# NOTE (Layer 2 DONE 2026-06-12): these now publish to GHCR in CI; the cluster
+# PULLS them. This script is the FALLBACK (offline / fork / pre-release).
+#
 set -euo pipefail
 SRC="${SRC:-$HOME/src}"
 CTR="${CTR:-sudo k3s ctr}"

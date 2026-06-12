@@ -69,8 +69,8 @@ spec:
     spec:
       containers:
         - name: almanac
-          image: localhost/almanac:dev
-          imagePullPolicy: Never
+          image: ghcr.io/carriedworlduniverse/almanac:main
+          imagePullPolicy: Always
           ports:
             - name: grpc
               containerPort: 8083

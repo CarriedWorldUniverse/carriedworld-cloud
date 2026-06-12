@@ -133,22 +133,41 @@ kubectl -n croft create secret generic croft-gh-token   --from-literal=GH_TOKEN=
 kubectl -n croft create secret generic croft-claude-auth --from-literal=CLAUDE_CODE_OAUTH_TOKEN=<token>
 # Tailscale auth key (croft + broker tailscale sidecars):
 kubectl -n nexus create secret generic tailscale-auth --from-literal=TS_AUTHKEY=<tskey>
+# GHCR pull secret (cluster pulls the service images) — a GitHub token with
+# read:packages. Create in every namespace that runs platform images, and
+# attach to the default SA so pods pull without per-manifest config:
+for ns in cwb nexus croft; do
+  kubectl -n $ns create secret docker-registry ghcr-pull \
+    --docker-server=ghcr.io --docker-username=<gh-user> --docker-password=<token>
+  kubectl -n $ns patch serviceaccount default -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}'
+done
+# custom-SA pillars also need it:
+for sa in mason porter-backup; do kubectl -n cwb patch serviceaccount $sa -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}'; done
 # Google Drive oauth bundle into custodian (after custodian is up, §6) — see §A.
 ```
 
 ---
 
-## 5. Build all images
+## 5. Images — PULL from GHCR (primary)
 
-No registry — build from source into k3s containerd:
+The platform images publish to GHCR automatically on every merge to main
+(each repo's `.github/workflows/release-image.yml`). With the `ghcr-pull`
+secret in place (§4a) the cluster pulls them — NO local build needed. The
+manifests already reference `ghcr.io/carriedworlduniverse/<svc>:main`, so
+there is nothing to do here except confirm the pull works:
 
 ```sh
-SRC=~/src bash ~/src/carriedworld-cloud/bootstrap/build-all-images.sh
-sudo k3s ctr images ls | grep localhost    # ~15 localhost/*:dev images
+sudo podman login ghcr.io -u <gh-user> -p <token>
+sudo podman pull ghcr.io/carriedworlduniverse/herald:main   # smoke one
 ```
 
-(Layer-2 future: publish to GHCR in CI so this becomes `kubectl`-pulls instead
-of a 15-image local build.)
+**Fallback (no internet / building a fork / pre-release):** build locally —
+```sh
+SRC=~/src bash ~/src/carriedworld-cloud/bootstrap/build-all-images.sh
+```
+then temporarily set the manifests' images to `localhost/<svc>:dev` +
+`imagePullPolicy: Never`. The GHCR pull path is the default; this is the
+escape hatch.
 
 ---
 
@@ -289,8 +308,9 @@ non-sensitive, so publishing needs no Google verification.
 
 ## Reproducibility gaps still open (Layer 2/3)
 
-- **Images are local-build-only** — no registry. Publishing to GHCR in CI is the
-  Layer-2 fix (recovery becomes pull, not build).
+- ~~Images local-build-only~~ **DONE (Layer 2, 2026-06-12):** all 10 platform
+  images publish to GHCR in CI; cluster pulls them. `build-all-images.sh` is
+  now the fallback. (nexus broker/aspect images still local-build — follow-up.)
 - **Logging stack** (loki/alertmanager) install is not yet captured here.
 - **This runbook is not yet end-to-end tested** on a throwaway cluster — that
   drill (Layer 3) is what turns it from "should work" to "watched it work."
