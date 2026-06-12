@@ -46,6 +46,35 @@ pillar checks its own scope strings).
 6. **Discoverability.** cw caps / an endpoint listing the tree; atlas/UI can
    render it; the grant verb validates against it.
 
+## Herald is the capability authority (operator 2026-06-12)
+
+Herald HOLDS the capability vocabulary and ENCODES the granted set into the
+token; ledger/cairn/custodian/etc. are pure ENFORCERS of what herald encoded
+— they never invent or store capability truth, they read the verified token
+and honor it. So the registry ships in herald (or a herald-owned shared lib),
+and the grant verb is herald minting capability claims. One authority defines
++ grants; every pillar enforces locally with no callback.
+
+## Two access models, not one (operator 2026-06-12, via custodian)
+
+The tree needs BOTH axes; effective = max of them:
+- **Scope-based** — what the org grants you over ORG resources.
+- **Ownership-based** — what you made, you control, regardless of scope.
+
+Custodian is the worked example:
+- Member gets **custodian:read** over **org-created** credentials — USE the
+  shared Meshy key / Drive token / DB connection, cannot mutate.
+- Creator always has **create/read/delete** over credentials THEY created.
+This is the satchel-vs-vault split made concrete: self-created = personal bag
+(full CRUD, yours); org-created = shared vault (members read). Same shape as
+GitHub (own your repos outright; org repos follow org role).
+
+OPEN (decide at spec): org-credential lifecycle (create/delete of SHARED org
+creds) is neither member-read nor self-ownership — it's an org-admin /
+custodian:write|admin capability. And shared org creds should be OWNED BY THE
+ORG (org-admin manages), not the individual who ran the command, so they
+survive that person leaving.
+
 ## Step zero
 
 Inventory every scope actually CHECKED in code today (grep the pillars),
