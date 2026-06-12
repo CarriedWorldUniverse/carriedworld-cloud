@@ -130,11 +130,14 @@ spec:
     spec:
       serviceAccountName: atlas
       # The herald issuer URL is the HOST's tailnet name — it doesn't resolve
-      # via cluster DNS (no tailscale netns visibility for the app's own
-      # resolver path); alias it to the interchange-gateway ClusterIP, which
-      # fronts herald on :8080 (croft uses the same pattern via the node IP).
+      # via cluster DNS; alias it to the host's tailnet IP, where `tailscale
+      # serve` terminates TLS on :443 (LE cert for dmonextreme.tail41686e.
+      # ts.net) and proxies to the gateway on localhost:8080. The pod needs
+      # that tailscale-serve HTTPS endpoint for the OIDC token backchannel —
+      # same URL base the browser uses for /authorize, so cert names line up
+      # end to end. mason/porter still go via cluster DNS.
       hostAliases:
-        - ip: "10.43.239.151"
+        - ip: "100.91.185.71"
           hostnames: ["dmonextreme.tail41686e.ts.net"]
       containers:
         # 1. atlas itself — collector loop + StrataService gRPC + web map.
@@ -158,7 +161,7 @@ spec:
             - { name: ATLAS_MASON_ADDR, value: "mason.cwb.svc.cluster.local:8086" }
             - { name: ATLAS_PORTER_ADDR, value: "porter-backup.cwb.svc.cluster.local:8087" }
             # web map: herald auth-code gate + the tailscale LE cert for HTTPS
-            - { name: ATLAS_OIDC_ISSUER, value: "http://dmonextreme.tail41686e.ts.net:8080/herald" }
+            - { name: ATLAS_OIDC_ISSUER, value: "https://dmonextreme.tail41686e.ts.net/herald" }
             - { name: ATLAS_OIDC_REDIRECT_URL, value: "https://atlas.tail41686e.ts.net/oauth/callback" }
             - { name: ATLAS_HTTPS_CERT, value: /certs/tls.crt }
             - { name: ATLAS_HTTPS_KEY, value: /certs/tls.key }
