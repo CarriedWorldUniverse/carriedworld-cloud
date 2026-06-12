@@ -146,6 +146,17 @@ core. Two sequential models:
    reads + purely local cluster RBAC + status to its own org's keys. The
    same rule covers the operator's own fleet (carriedworld's boxes →
    carriedworld's masons).
+
+   **Applied to the CURRENT layout** (decided 2026-06-12): today's single
+   mason has NO org — it's a mesh citizen (mTLS + self-asserted headers).
+   The doctrine splits it into TWO masons when mason gains herald identity:
+   a **platform mason** (org cwb-admin; reconciles the core itself — the
+   M2/NEX-624 pillars-as-declarations work; also brings herald's manifest
+   into GitOps) and a **tenant mason** (org carriedworld; nexus + croft
+   namespaces). Don't split physically before the identity layer lands —
+   but spec NEX-624 as the cwb-admin mason from day one, and adopt
+   org-scoped declaration prefixes (orgs/<org>/clouds/<cloud>/apps/...)
+   BEFORE more declarations accumulate.
 2. **Federation — their brain, connected.** A sovereign core (their own
    pillars) cross-trusting yours. The seam already exists: herald's
    RegisterIssuer + EnrollFederatedIdentity + the federated grant are
