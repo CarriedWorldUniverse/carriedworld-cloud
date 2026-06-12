@@ -14,6 +14,10 @@ kind: ServiceAccount
 metadata:
   name: porter-backup
   namespace: cwb
+# GHCR packages are private — pull via the cwb ghcr-pull dockerconfigjson
+# secret (out-of-band, same one the other pillar SAs carry).
+imagePullSecrets:
+  - name: ghcr-pull
 ---
 # cwb secrets (crown jewels) + porter's own cluster key — get-by-name only
 apiVersion: rbac.authorization.k8s.io/v1
