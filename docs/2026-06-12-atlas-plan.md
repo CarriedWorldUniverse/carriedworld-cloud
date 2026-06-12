@@ -12,6 +12,11 @@
 
 **Ordering note (proto first):** B1 must merge before B2/B4+ build against real generated code. Pin consumers to the cwb-proto pseudo-version after B1 merges (`go get github.com/CarriedWorldUniverse/cwb-proto@main`).
 
+**Amendments (2026-06-12, B1 review — schema as MERGED in cwb-proto PR #15 differs from the snippets below):**
+- `GetCloudStateResponse.backup` is a strata-local `BackupSummary` (last_success, last_attempt, last_error, `sources_count` int32, next_due) — NOT porter's `BackupStatus`. The mesh `BackupStatusService` keeps the full per-source `BackupStatus`; atlas's fold (B8) maps status → summary. The page (B11) reads `backup.sourcesCount`, not a sources array.
+- `Node.since` is named `created_at` (protojson: `createdAt`) — B6/B8/B11 snippets referring to `Since`/`since` follow the rename.
+- `BackupSource.size` is named `size_bytes` (B2's holder/server map `Source.Size` → proto `size_bytes`).
+
 ---
 
 ### Task B1: cwb-proto — strata.proto + porter.proto
