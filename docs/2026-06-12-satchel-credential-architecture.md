@@ -79,6 +79,34 @@ from a surprising place.
    multi-recipient envelopes, recovery codes, per-human onboarding. Gated on
    CWB hosting humans beyond the operator.
 
+## Owner-seed custody (DECIDED 2026-06-12, settles the herald-rooted
+## bootstrap's open question)
+
+**Hybrid, per-org seeds.** The owner seed (root from which agent keys derive
+by name) is a root credential — category 1 above — and follows the same
+rules:
+
+- **Per-org seeds, human-carried**: cwb-admin's owner seed pins platform
+  services; croft's pins carriedworld machines; a future tenant's pins
+  theirs. Home: the owner's satchel local tier (+ paper/manager backup
+  beside the recovery key). The seed NEVER touches the platform.
+- **Durable named citizens** (aspects shadow/keel/maren; machines
+  mason/porter/atlas): derived from the owner seed in a deliberate human
+  enrollment ceremony (rare). The derived private key then lives as a k8s
+  secret for runtime — compromise of a derived key = revoke that one agent;
+  it cannot mint others.
+- **Ephemeral workers** (dispatch builders): NOT seed-derived. A durable
+  agent holding a delegation scope mints short-TTL narrow-scope child
+  identities per run via herald's existing agent:create self-provision;
+  the act-chain records the minter, with the operator as ultimate
+  responsible human. Delegation can never grant more than the delegator
+  holds (the transitivity rule).
+- Rationale: platform-held seeds let a compromised core mint agents AS the
+  owner (kills the sovereignty invariant, breaks tenant symmetry);
+  pure-human custody puts the owner in the loop for every ephemeral
+  identity (kills automation). The hybrid gives ceremonies to the rare
+  durable events and delegation to the frequent ephemeral ones.
+
 ## Relation to prior design
 
 Custodian PR #1 (satchel as credential on-ramp) keeps its mechanics
