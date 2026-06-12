@@ -106,6 +106,26 @@ spec:
   commonName: porter-backup
   usages: ["client auth"]
 ---
+# Server cert for the BackupStatusService (the Strata map's backup clock).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: porter-backup-tls
+  namespace: cwb
+spec:
+  secretName: porter-backup-tls
+  dnsNames:
+    - porter-backup.cwb.svc
+    - porter-backup.cwb.svc.cluster.local
+  usages:
+    - server auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: cwb-ca
+    kind: Issuer
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -123,7 +143,7 @@ spec:
       serviceAccountName: porter-backup
       containers:
         - name: porter-backup
-          image: ghcr.io/carriedworlduniverse/porter-backup:sha-f062874@sha256:dd85f09829eb0f31f5d221b24a460d850682c83d3117bc0663fc90f139c0cea6
+          image: ghcr.io/carriedworlduniverse/porter-backup:sha-8fcf7e2@sha256:2f2ad2ed76d6945c43e4bd71f80dba5532c080752a9a94b7ba780c7ce5dcb469
           imagePullPolicy: IfNotPresent
           args: ["sync"]
           env:
@@ -139,14 +159,41 @@ spec:
             - { name: PORTER_TLS_CERT, value: /etc/porter/tls/tls.crt }
             - { name: PORTER_TLS_KEY, value: /etc/porter/tls/tls.key }
             - { name: PORTER_TLS_CA, value: /etc/porter/tls/ca.crt }
+            # BackupStatusService (Strata map backup clock) — server mTLS
+            - { name: PORTER_GRPC_ADDR, value: ":8087" }
+            - { name: PORTER_SERVER_TLS_CERT, value: /etc/porter/server-tls/tls.crt }
+            - { name: PORTER_SERVER_TLS_KEY, value: /etc/porter/server-tls/tls.key }
+            - { name: PORTER_SERVER_TLS_CA, value: /etc/porter/server-tls/ca.crt }
+          ports:
+            - { name: grpc, containerPort: 8087 }
           volumeMounts:
             - { name: hoststorage, mountPath: /hoststorage, readOnly: true }
             - { name: tls, mountPath: /etc/porter/tls, readOnly: true }
+            - { name: server-tls, mountPath: /etc/porter/server-tls, readOnly: true }
             - { name: work, mountPath: /work }
       volumes:
         - name: hoststorage
           hostPath: { path: /var/lib/rancher/k3s/storage, type: Directory }
         - name: tls
           secret: { secretName: porter-backup-client-tls }
+        - name: server-tls
+          secret: { secretName: porter-backup-tls }
         - name: work
           emptyDir: { sizeLimit: 8Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: porter-backup
+  namespace: cwb
+  labels:
+    app: porter-backup
+spec:
+  type: ClusterIP
+  selector:
+    app: porter-backup
+  ports:
+    - name: grpc
+      port: 8087
+      targetPort: grpc
+      protocol: TCP
