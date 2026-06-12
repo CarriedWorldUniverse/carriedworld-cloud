@@ -235,11 +235,12 @@ data:
       apt-get update -qq
       apt-get install -y -qq --no-install-recommends openssh-server mosh tmux lynx dbus dbus-x11 gnome-keyring ca-certificates sudo >/dev/null
     fi
-    # claude-code (the orchestrator runs `claude` in-pod). npm global; tolerate offline.
-    # This runs as root: keep root's npm cache off the PVC home (root-owned files
-    # there break the operator user's own npm — "cache folder contains root-owned files").
-    if ! command -v claude >/dev/null 2>&1; then
-      log "installing claude-code (best-effort)"
+    # claude-code: the PVC-native install (~/.local/share/claude, self-updating,
+    # operator-owned) is canonical. The npm fallback only covers a cold PVC and
+    # runs as root: keep root's npm cache off the PVC home (root-owned files
+    # there break the operator user's own npm).
+    if [ ! -x /home/operator/.local/bin/claude ] && ! command -v claude >/dev/null 2>&1; then
+      log "installing claude-code (npm fallback; native install preferred once PVC is warm)"
       npm_config_cache=/tmp/npm-root-cache npm install -g @anthropic-ai/claude-code >/dev/null 2>&1 || log "claude-code install skipped (offline?)"
     fi
     # prefer the PVC-built cw (tracks merged main) over the image's stale copy
