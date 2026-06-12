@@ -72,8 +72,8 @@ spec:
     spec:
       containers:
         - name: custodian
-          image: ghcr.io/carriedworlduniverse/custodian:main
-          imagePullPolicy: Always
+          image: ghcr.io/carriedworlduniverse/custodian:sha-6e40797@sha256:13ec27ecb1ef5740f61cf954692570e9032f0022e7441d48e07b84b6dc605cb8
+          imagePullPolicy: IfNotPresent
           ports:
             - name: grpc
               containerPort: 8085

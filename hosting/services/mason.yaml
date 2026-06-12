@@ -101,10 +101,12 @@ spec:
         app: mason
     spec:
       serviceAccountName: mason
+      imagePullSecrets:
+        - name: ghcr-pull
       containers:
         - name: mason
-          image: localhost/mason:dev
-          imagePullPolicy: Never
+          image: ghcr.io/carriedworlduniverse/mason:sha-1cb7717@sha256:86e94eb6d8b2f04f0e75ca0f2dab6cf8211519445ad1bb97f025a100f765d89b
+          imagePullPolicy: IfNotPresent
           ports:
             - name: grpc
               containerPort: 8086

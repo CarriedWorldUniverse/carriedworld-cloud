@@ -123,8 +123,8 @@ spec:
       serviceAccountName: porter-backup
       containers:
         - name: porter-backup
-          image: ghcr.io/carriedworlduniverse/porter-backup:main
-          imagePullPolicy: Always
+          image: ghcr.io/carriedworlduniverse/porter-backup:sha-f062874@sha256:dd85f09829eb0f31f5d221b24a460d850682c83d3117bc0663fc90f139c0cea6
+          imagePullPolicy: IfNotPresent
           args: ["sync"]
           env:
             - { name: PORTER_ALMANAC_GRPC_ADDR, value: "almanac.cwb.svc.cluster.local:8083" }
