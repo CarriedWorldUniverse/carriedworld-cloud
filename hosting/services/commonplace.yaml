@@ -75,8 +75,8 @@ spec:
           value: nomic-embed-text
         - name: COMMONPLACE_EMBED_DIM
           value: '768'
-        image: localhost/commonplace:dev
-        imagePullPolicy: Never
+        image: ghcr.io/carriedworlduniverse/commonplace:main
+        imagePullPolicy: Always
         livenessProbe:
           failureThreshold: 3
           initialDelaySeconds: 10

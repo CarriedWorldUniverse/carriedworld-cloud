@@ -69,8 +69,8 @@ spec:
           value: /var/lib/nexus/ledger.db
         - name: LEDGER_AUTH_MODE
           value: gateway
-        image: localhost/ledger:dev
-        imagePullPolicy: Never
+        image: ghcr.io/carriedworlduniverse/ledger:main
+        imagePullPolicy: Always
         livenessProbe:
           failureThreshold: 3
           initialDelaySeconds: 10
