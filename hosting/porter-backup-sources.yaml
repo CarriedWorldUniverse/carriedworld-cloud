@@ -26,7 +26,7 @@
     - { ns: nexus, name: observer-keyfile }
     - { ns: nexus, name: lynxai-env }
     - { ns: nexus, name: hosting-git-token }
-    - { ns: porter, name: porter-cluster-key }
+    - { ns: cwb, name: porter-cluster-key }
 - name: almanac
   type: sqlite
   path: /hoststorage/pvc-a7ec5248-be26-49e4-b787-072410af711e_cwb_almanac-data/almanac.db

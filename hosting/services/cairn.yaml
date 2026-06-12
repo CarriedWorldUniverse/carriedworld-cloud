@@ -1,0 +1,174 @@
+# cairn — the CWB native-git pillar (gRPC + SSH). Extracted from live cluster
+# 2026-06-12 (was cluster-state-only). cairn-ssh is a LoadBalancer on :2222.
+# cairn-secrets (ssh host key) is out-of-band, restored from porter.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cairn-client-tls
+  namespace: cwb
+spec:
+  commonName: cairn
+  dnsNames:
+  - cairn.cwb.svc
+  - cairn.cwb.svc.cluster.local
+  - cairn
+  issuerRef:
+    kind: Issuer
+    name: cwb-ca
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  secretName: cairn-client-tls
+  usages:
+  - server auth
+  - client auth
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cairn-data
+  namespace: cwb
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cairn
+  namespace: cwb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cairn
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: cairn
+    spec:
+      containers:
+      - env:
+        - name: HERALD_GRPC_ADDR
+          value: herald.cwb.svc:8098
+        - name: CAIRN_GRPC_ADDR
+          value: :8102
+        - name: LEDGER_GRPC_ADDR
+          value: ledger.cwb.svc:8081
+        - name: CAIRN_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: CAIRN_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: CAIRN_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        - name: CAIRN_HTTP_ADDR
+          value: :8100
+        - name: CAIRN_SSH_ADDR
+          value: :2222
+        - name: CAIRN_DB
+          value: /var/lib/nexus/cairn.db
+        - name: CAIRN_REPO_ROOT
+          value: /var/lib/nexus/repos
+        - name: HERALD_BASE_URL
+          value: http://herald.cwb.svc:8099
+        - name: LEDGER_BASE_URL
+          value: http://ledger.cwb.svc:8081
+        - name: CAIRN_HOST_KEY
+          valueFrom:
+            secretKeyRef:
+              key: ssh_host_key
+              name: cairn-secrets
+        image: localhost/cairn:dev
+        imagePullPolicy: Never
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: cairn
+        ports:
+        - containerPort: 8102
+          name: grpc
+          protocol: TCP
+        - containerPort: 8100
+          name: http
+          protocol: TCP
+        - containerPort: 2222
+          name: ssh
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources: {}
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: tls
+          readOnly: true
+        - mountPath: /var/lib/nexus
+          name: data
+      volumes:
+      - name: tls
+        secret:
+          defaultMode: 420
+          secretName: cairn-client-tls
+      - name: data
+        persistentVolumeClaim:
+          claimName: cairn-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cairn
+  namespace: cwb
+spec:
+  ports:
+  - name: http
+    port: 8100
+    protocol: TCP
+    targetPort: http
+  - name: grpc
+    port: 8102
+    protocol: TCP
+    targetPort: grpc
+  selector:
+    app: cairn
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cairn-ssh
+  namespace: cwb
+spec:
+  ports:
+  - name: ssh
+    port: 2222
+    protocol: TCP
+    targetPort: ssh
+  selector:
+    app: cairn
+  type: LoadBalancer
+

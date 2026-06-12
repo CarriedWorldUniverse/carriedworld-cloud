@@ -1,0 +1,126 @@
+# ledger — the CWB work/issue tracker pillar. Extracted from live cluster
+# 2026-06-12 (was cluster-state-only). Needs cwb-ca Issuer + ledger-data PVC.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ledger-tls
+  namespace: cwb
+spec:
+  dnsNames:
+  - ledger.cwb.svc
+  - ledger.cwb.svc.cluster.local
+  - ledger
+  issuerRef:
+    kind: Issuer
+    name: cwb-ca
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  secretName: ledger-tls
+  usages:
+  - server auth
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ledger-data
+  namespace: cwb
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-path
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ledger
+  namespace: cwb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ledger
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: ledger
+    spec:
+      containers:
+      - env:
+        - name: LEDGER_GRPC_ADDR
+          value: :8081
+        - name: LEDGER_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: LEDGER_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: LEDGER_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        - name: LEDGER_ADDR
+          value: :8081
+        - name: LEDGER_DB
+          value: /var/lib/nexus/ledger.db
+        - name: LEDGER_AUTH_MODE
+          value: gateway
+        image: localhost/ledger:dev
+        imagePullPolicy: Never
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          successThreshold: 1
+          tcpSocket:
+            port: 8081
+          timeoutSeconds: 1
+        name: ledger
+        ports:
+        - containerPort: 8081
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: 8081
+          timeoutSeconds: 1
+        resources: {}
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: tls
+          readOnly: true
+        - mountPath: /var/lib/nexus
+          name: data
+      volumes:
+      - name: tls
+        secret:
+          defaultMode: 420
+          secretName: ledger-tls
+      - name: data
+        persistentVolumeClaim:
+          claimName: ledger-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledger
+  namespace: cwb
+spec:
+  ports:
+  - name: http
+    port: 8081
+    protocol: TCP
+    targetPort: http
+  selector:
+    app: ledger
+  type: ClusterIP
+
