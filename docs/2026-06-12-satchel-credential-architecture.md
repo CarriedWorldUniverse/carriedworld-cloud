@@ -107,6 +107,37 @@ rules:
   identity (kills automation). The hybrid gives ceremonies to the rare
   durable events and delegation to the frequent ephemeral ones.
 
+## Owned-AI tag (operator 2026-06-12) — disclosure, not control
+
+A default-on, read-only IDENTITY CLASSIFICATION (NOT a capability scope, NOT
+a governance gate). Two jobs, both declarative:
+1. **Tag the AI to its responsible human** — surface the ownership binding
+   (already half-present as the token's act.sub / human_fp) as a first-class,
+   default, readable attribute. Owner = responsible_human, which becomes
+   MANDATORY for AI (no anonymous/orphan AI; the field is nullable today).
+2. **Let a counterparty know it's talking to an AI** so it adapts response
+   format (machine-readable vs prose, terse vs explanatory, an "AI" badge in
+   a UI, structured tool output). Informational; never restricts what the AI
+   may do.
+
+Design consequences:
+- **kind must distinguish AI from machine.** Today mason (deterministic
+  service) and shadow/keel/maren (general AI) are both kind=agent, so
+  kind=agent can't answer "is this an AI?". Refine kind → **human / ai /
+  service**; the owner tag rides alongside. A service doesn't get the
+  format-for-AI treatment and isn't the disclosure concern; a general AI is.
+- **Source-of-truth vs propagation.** The herald TOKEN is authoritative (any
+  verifier sees "ai, owner=croft" with no lookup, via a claim + /api/me).
+  Interaction SURFACES must ECHO it onward so counterparties can branch — a
+  chat message from an AI is tagged, a PR an AI opens is labeled, an MCP call
+  announces it. This reach beyond herald is the bulk of the work.
+- **Stance it bakes in:** the platform DISCLOSES AI-ness structurally rather
+  than letting an AI pass as human — default + mandatory. A transparency
+  guarantee, not a convention.
+
+Spike: NEX-638. Supersedes the earlier (governance-flavored) framing of the
+"owned-AI grant" — it is a disclosure tag, not a scope.
+
 ## Relation to prior design
 
 Custodian PR #1 (satchel as credential on-ramp) keeps its mechanics
