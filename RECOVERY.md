@@ -154,7 +154,14 @@ The platform images publish to GHCR automatically on every merge to main
 (each repo's `.github/workflows/release-image.yml`). With the `ghcr-pull`
 secret in place (§4a) the cluster pulls them — NO local build needed. The
 manifests already reference `ghcr.io/carriedworlduniverse/<svc>:main`, so
-there is nothing to do here except confirm the pull works:
+there is nothing to do here except confirm the pull works. The manifests are
+DIGEST-PINNED (`:sha-<commit>@sha256:<digest>` + `imagePullPolicy: IfNotPresent`)
+— so recovery rebuilds EXACTLY what was running, a restart never silently pulls
+a different (or compromised) image, and an UPGRADE is a deliberate act: bump the
+pin to a newer `:sha-<commit>@sha256:<digest>` (a reviewable commit diff), commit,
+apply. The committed manifests are the version-of-record; the reconcile CronJob
+enforces them (live drift reverts to git).
+
 
 ```sh
 sudo podman login ghcr.io -u <gh-user> -p <token>
