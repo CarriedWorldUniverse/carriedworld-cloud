@@ -16,6 +16,7 @@
 - `GetCloudStateResponse.backup` is a strata-local `BackupSummary` (last_success, last_attempt, last_error, `sources_count` int32, next_due) — NOT porter's `BackupStatus`. The mesh `BackupStatusService` keeps the full per-source `BackupStatus`; atlas's fold (B8) maps status → summary. The page (B11) reads `backup.sourcesCount`, not a sources array.
 - `Node.since` is named `created_at` (protojson: `createdAt`) — B6/B8/B11 snippets referring to `Since`/`since` follow the rename.
 - `BackupSource.size` is named `size_bytes` (B2's holder/server map `Source.Size` → proto `size_bytes`).
+- **Edge path (B12 reality):** the gateway mounts pillars under a stripped prefix — StrataService is externally **`/atlas/api/strata/state`**, not bare `/api/strata/state`. B13 verification + B14 conformance must use the prefixed path.
 
 ---
 
