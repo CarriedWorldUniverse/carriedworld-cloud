@@ -74,6 +74,50 @@ the shadow pod — raw-CC-on-a-wake-loop (keep controller-grade capability) vs
 the agentfunnel goal-loop harness (uniform with maren/keel, watch the
 re-entry bug). Either way: in the shadow pod, not croft.
 
+## The operating model — activated tickets (operator 2026-06-13)
+
+You QUEUE + ACTIVATE tickets; shadow's loop works the ACTIVATED LIST in your
+order. Per-ticket cycle:
+```
+next activated ticket → DECOMPOSE (plan / sub-tickets / dispatch briefs,
+  via the spec+planning skills) → dispatch pieces to the pull pipeline
+  → watch acceptance (dispatch skill verify-gate) → review PRs
+  → merge green low-risk → ticket done → next
+activated list empty / budget low → idle → wake when you activate more
+```
+
+- **"Activated" is the steering wheel AND the primary guardrail, one knob.**
+  Shadow works ONLY activated tickets (not everything `ready`), in your order.
+  Cross-cutting/destructive/identity-auth work is simply NOT activated — you
+  drive it yourself in croft. Two composable layers: ACTIVATION gates WHICH
+  tickets shadow may touch; the merge-green-low-risk line gates HOW FAR within
+  one. Most of the safety lives in "only what I activated."
+- **Decompose = shadow running the spec/planning phase** (what was done for
+  atlas tonight, loop-driven instead of operator-driven). Big tickets
+  decompose into sub-tickets that can themselves be activated → mildly
+  recursive.
+- **Classify each unit by SKILL SET needed** — the intelligent half of
+  decompose. Shadow tags every dispatch unit with the skill it requires
+  (go-build→anvil/plumb · research→harrow · art/3D→maren · game-AI
+  training→forge · …); workers advertise skills and pull matching jobs. The
+  pool is skill-scoped (the specialist-pod images ARE the skills); shadow
+  classifies, the pipeline matches — cognition vs plumbing. Common case
+  (generic build) load-balances across anvil/plumb; specialist case targets.
+  A unit needing a skill NO active worker advertises = ESCALATE (capability
+  gap), never queue an unclaimable job.
+- **Shadow keeps the pipeline FED, not one-ticket-at-a-time.** Decompose A,
+  dispatch its pieces, then decompose B while builders work A — every idle
+  builder busy from the activated list. Serialism stays per-builder; shadow
+  juggles workstreams against builder availability + budget. This is what
+  "keep work flowing while tokens are available" means concretely.
+- **keel→shadow handoff via activation:** keel files an ops ticket → it sits
+  un-activated until the operator (or an auto-activate rule for known-safe
+  classes) activates it. The activation gate is where ops-detection meets
+  human judgment before work fires.
+
+Needs: an "activated" ticket state (jira status/label or the dispatch-queue's
+own flag) distinct from `ready` — the explicit, ordered, per-ticket go signal.
+
 ## Decisions (operator 2026-06-13)
 
 - **Autonomy line = through merge of green low-risk PRs.** Autonomous without
