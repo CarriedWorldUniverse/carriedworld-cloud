@@ -74,6 +74,39 @@ locally. The real question is the MOUNT's cache/sync design:
   is why collaborative/platform cairn stays on a low-latency store (PVC). The
   two cairn modes split HERE — in the mount's sync semantics, not in Drive.
 
+## The backend SEAM (operator 2026-06-13) — swap backends without rewriting
+
+Put the seam BELOW the crypto: an object-store/backend interface = dumb CRUD
+over OPAQUE encrypted blobs at keys. casket sealing stays ABOVE it (porter's one
+impl); the backend never sees plaintext. Swap Drive→R2→local by writing a new
+backend impl + config flip — never touch porter's logic, the mount, or the
+consumers.
+
+Interface shape (minimal + capability-tiered, Go optional-interface idiom):
+- **Core (every backend):** Put(key,blob), Get(key), List(prefix), Delete(key),
+  Stat/Exists. Backup needs only this.
+- **Optional capabilities (backend MAY implement; the mount feature-detects):**
+  RangeReader (partial reads, for large files), ConditionalPut/CompareAndSwap
+  (atomicity — the lever for multi-writer). The mount asks "supports X?" and
+  degrades/refuses; don't force every backend to do everything.
+
+The seam is WHERE the cairn-mode gating question is answered per-backend (it's
+not "Drive can't" — it's "does the backend expose the conditional/atomic
+primitive the mount needs"):
+- **Drive** (current) → core only, no conditional-put → single-writer mode
+  (personal cairn, satchel).
+- **S3 / R2** → conditional puts + range reads → the mount COULD do multi-writer
+  Drive can't; same porter, richer cairn mode. R2 fits the hosting direction
+  (Cloudflare, zero-egress, no lock-in).
+- **local FS** → dev/test/on-cluster (POSIX gives everything).
+
+Backend = config (PORTER_BACKEND=drive|r2|s3|local); per-backend creds brokered
+through custodian (the existing Drive-OAuth pattern). `internal/drive` becomes
+one impl (`drivebackend`) behind the interface.
+
+Same discipline as the satchel local-store interface, the dispatch K8sIface,
+ledger's Store seam — seam every backend so the tool isn't rewritten.
+
 ## Platform framing
 
 Porter = a platform STORAGE PRIMITIVE: "casket-encrypted remote filesystem,"
