@@ -197,6 +197,24 @@ GENERICITY FIXES ledger needs first (the nexus-leak audit, NEX-645):
 5. **keel system engineer — NEX-643:** parallel; consumes NEX-640 escalations,
    feeds shadow's queue.
 
+## Dependency: real review gating needs cairn (identity-native git)
+
+Autonomous shadow's review→merge step requires the reviewer-≠-author /
+author-can't-self-merge gate to be REAL, not an honor-system convention. Today
+all aspects + shadow funnel through ONE GitHub bot account (nexus-cw), so
+author==reviewer==merger — GitHub's formal request-changes/approve gates don't
+even fire ("can't review your own PR"), and an autonomous loop merging builder
+PRs on that shared identity would be rubber-stamping itself: the accountability
+is fictional. CAIRN (CWB's herald-identity-native git) is the fix — each aspect
+pushes/commits/reviews AS its own herald identity (signed, per-aspect), so the
+gate is enforced by construction. This is the AAA story applied to code
+(authn = who pushed/reviewed; authz = who may merge; audit = signed per-aspect
+history). The builders are on the GitHub path only as the explicit interim
+("cairn not functional yet → cw pr once it works"); the review-gating gap
+resolves at the cairn cutover. => cairn (or distinct per-aspect GitHub
+identities as a stopgap) is on the CRITICAL PATH for the autonomous-review half
+of NEX-642, not a nice-to-have.
+
 ## Supersedes / relates
 
 - NEX-176 (keel takes over DISPATCH) — OBSOLETE premise: the pull pipeline
