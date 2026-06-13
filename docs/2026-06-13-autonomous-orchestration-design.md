@@ -55,16 +55,49 @@ HARD-STOP + escalate to operator: destructive ops, cross-cutting / central-
 policy changes, identity/auth changes, spend/outward-facing actions, scope
 changes, novel/security ops events. Enforced as GATES, not conventions.
 
-## Runtime shape (implementation choice, to settle)
+## Runtime shape — TWO PLANES, kept distinct (operator 2026-06-13)
 
-shadow wants BOTH max capability (raw Claude Code + MCPs, controller-shaped —
-its current shape) AND autonomy (a wake-loop). Options: (a) raw-CC in the
-always-on croft pod driven by a scheduled wake-loop (loop/schedule primitives)
-— keeps capability, gains autonomy; (b) deployed goal-loop aspect under
-agentfunnel (proven by maren posting art unattended, keel always-on) — uniform
-with the harness but possibly less capable than raw CC. Lean (a) for shadow's
-capability; keel fits (b) cleanly. Watch the goal-loop re-entry bug
-(false "more work to do" on empty inbox) for whichever harness.
+**croft stays the operator's control plane** — your pod, your identity, your
+interactive seat; it NEVER hosts an autonomous loop (that would be your
+workspace acting without you). **The live loop runs in the SHADOW POD** (the
+deployed shadow-aspect, already running). Shadow's real, distinct home — not a
+vestige of croft.
+
+Identity consequence: the autonomous loop acts AS shadow (owned-AI,
+responsible_human=croft), NOT as croft. Audit reads "shadow, owned by croft,
+did X"; "croft did X" is reserved for what the operator actually did. The
+human identity is never the one acting unattended. (Refines the earlier
+"shadow acts as croft" shorthand.)
+
+Remaining sub-question (decided at flip-time, NEX-642): HOW it loops inside
+the shadow pod — raw-CC-on-a-wake-loop (keep controller-grade capability) vs
+the agentfunnel goal-loop harness (uniform with maren/keel, watch the
+re-entry bug). Either way: in the shadow pod, not croft.
+
+## Decisions (operator 2026-06-13)
+
+- **Autonomy line = through merge of green low-risk PRs.** Autonomous without
+  the operator: queue-fill/groom, dispatch, review, MERGE green low-risk PRs,
+  backfill. Hard-stop + escalate: destructive, cross-cutting/central-policy,
+  identity/auth, spend/outward-facing, scope, anything not green, and (keel)
+  novel/security ops events.
+- **Build the floor first; flip autonomy deliberately.** Do NOT put shadow on
+  a live autonomous clock yet. Build the prerequisites, then turn it on as a
+  conscious act. Runtime shape (raw-CC-in-croft wake-loop vs goal-loop aspect)
+  is decided AT flip-time, not now.
+
+## Build order (to autonomous shadow)
+
+1. **Interim trust floor — DONE:** the dispatch skill verify-gate (nexus PR
+   #379). Lets a future loop not be fooled by phantom "ok".
+2. **Full trust floor — NEX-640:** first-class dispatch, honest 200 (=builder
+   accepted), escalated error events.
+3. **Pull pipeline — NEX-644:** durable queue + worker pool + self-routing
+   (the routing layer; the NEX-640 acceptance contract is its state machine).
+4. **Flip shadow autonomous — NEX-642:** wake-loop, the autonomy line above,
+   runtime chosen deliberately here.
+5. **keel system engineer — NEX-643:** parallel; consumes NEX-640 escalations,
+   feeds shadow's queue.
 
 ## Supersedes / relates
 
