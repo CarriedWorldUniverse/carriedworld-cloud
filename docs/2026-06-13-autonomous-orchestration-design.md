@@ -233,9 +233,71 @@ in are one trigger machinery; no separate "go review" path.
 Mechanics to nail (NEX-642):
 - **Wake coalescing/debounce** — N tickets going ready at once must not spawn N
   shadows; a burst drains all-currently-ready, overlapping triggers collapse.
-- **Drain boundary + budget** — drain until the ready-set is empty (incl.
-  tickets that go ready mid-burst) vs snapshot-at-wake + defer late arrivals;
-  capped by the budget governor (drain until ready-empty OR budget-low). OPEN.
+- **Drain boundary + budget** — DECIDED (operator 2026-06-13):
+  snapshot-at-wake, ONE drain in flight, reliable re-trigger. Capped by the
+  budget governor (drain until snapshot handled OR budget-low).
+
+## Shadow is a controller over ledger (the loop's formal model)
+
+The drain triad is the KUBERNETES CONTROLLER / reconciler pattern — adopt its
+semantics wholesale (the platform is k8s-native; this is battle-tested for
+"converge actual→desired without polling or stale state"). Shadow reconciles
+`ready tickets → dispatched work` the way a controller reconciles desired→actual.
+
+- **Level-triggered, not edge-triggered.** Each drain RE-READS the ready set
+  from ledger. It reacts to "go look at current truth," not to a specific
+  event. So a dropped/duplicated wake can't corrupt anything — the next drain
+  re-derives reality. (This IS "awareness lives in ledger", load-bearing.)
+- **One drain in flight + pending-bit (coalescing workqueue).** Idle+trigger →
+  drain. Draining+trigger(s) → set pending=true (no 2nd drain). Drain finishes
+  → if pending, clear + drain again. N mid-drain triggers collapse to one
+  follow-up drain; the bit carries NO data (just "look again"). Guarantees no
+  ready ticket strands (handled ≤ one-drain-later) and never >1 drain running.
+- **Heartbeat resync backstop.** Low-frequency unconditional drain (resync
+  period) defends the one failure mode of pure event-driven — a lost wakeup
+  stranding ready work forever. Events make it responsive; the heartbeat makes
+  it eventually-correct regardless.
+- NOT controller-runtime the library (shadow is a reasoning loop, not Go) — the
+  SEMANTICS (level-triggered reconcile + coalescing workqueue + resync).
+
+## The dispatch engine = the actual-state half (operator 2026-06-13)
+
+A level-triggered reconcile is ONLY safe with robust actual-state tracking. The
+trap: shadow re-reads the ready set each drain; a unit it dispatched 30s ago is
+now claimed+running, but if nothing tracks that, the re-drain sees it as ready
+and DISPATCHES IT AGAIN. Level-triggered without actual-state tracking either
+duplicates or strands. So the dispatch engine is the OTHER HALF of the reconcile,
+not a side-component.
+
+TWO controllers, layered:
+1. **Shadow** reconciles ready-tickets → dispatched-work (decompose+emit). High-level.
+2. **Dispatch engine** reconciles real builder-Job reality → ledger sub-ticket
+   status (Job created→claimed; pod accepted→accepted; running; PR merged→done;
+   Job died/timed-out/vanished→failed/lost). Low-level; keeps "actual" truthful
+   vs what k8s is really doing.
+Shadow reads both halves from ledger; the engine makes "actual" real.
+
+- **Idempotency is the payoff.** The engine transitions each unit's ledger
+  status as the builder takes it, so shadow's re-drain only emits units still in
+  `ready` — claimed/running ones aren't in the ready set, so re-reading can't
+  double-dispatch. The tracker is what makes the level-triggered loop safe.
+- **Death/stall detection lives here.** The engine runs the idle-timeout
+  (NEX-640 progress-timer); a dead/hung/empty builder → transition to
+  failed/lost → a ledger state-change that wakes shadow to requeue/escalate.
+  Self-heals through the same trigger machinery.
+- **State lives in ledger.** Lifecycle = the sub-ticket's workflow status via
+  TransitionIssue (queued/claimed/accepted/running/in-review/done/failed/lost),
+  so "actual" sits in the same event-bus shadow reconciles against ("awareness
+  lives in ledger"). Run-level detail (Job, run id, durable logs, last-progress)
+  hangs off it as a run record.
+
+This is NEX-640 (honest dispatch + durable run record + escalation) + NEX-644
+(claim/lifecycle state machine), correctly FRAMED: not "nice observability" but
+the actual-state reconciler the whole loop stands on. Every dispatch failure
+2026-06-13 was this engine not existing yet — phantom "ok" (no claimed-state),
+30-min black box (no liveness/death), TTL'd pod no trace (no run record). We ran
+shadow's high-level loop by hand against a low-level engine that tracks nothing,
+which is why it kept lying.
 
 ## Dependency: real review gating needs cairn (identity-native git)
 
