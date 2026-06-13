@@ -197,6 +197,46 @@ GENERICITY FIXES ledger needs first (the nexus-leak audit, NEX-645):
 5. **keel system engineer — NEX-643:** parallel; consumes NEX-640 escalations,
    feeds shadow's queue.
 
+## The loop model — a trigger cascade through ledger (operator 2026-06-13)
+
+Not polling, not awake-forever: a TRIGGER CASCADE with ledger as the event bus.
+Each layer is woken by a ledger state-change, drains its responsibility, and
+emits state-changes that wake the next layer.
+
+```
+ticket → ready (ledger state-change)
+  └─ wakes SHADOW → drains ALL ready tickets: decompose + classify → emit ready sub-units
+       └─ sub-unit ready (state-change)
+            └─ wakes a BUILDER (ephemeral, one per unit) → does it → opens PR / transitions sub-ticket
+                 └─ ticket state-change
+                      └─ wakes SHADOW again → review / merge / unblock parent
+```
+
+Reconciles awake-vs-woken (both are triggered; they differ in scope):
+- **Shadow = triggered, then drains-to-empty.** Woken by a ticket state-change,
+  stays up handling EVERY ready ticket, then sleeps. Aware+consistent within
+  the burst; does NOT hold awareness across sleeps.
+- **Builders = woken agents** — ephemeral, one woken per work-unit, do the one
+  thing, die (matches launch-a-Job-per-unit).
+
+Why this is the SAFE form of "aware & consistent": **awareness lives in LEDGER,
+not in a long-lived agent context.** Shadow re-reads the ready set each burst;
+ledger is the durable truth. So it's aware (full ready set), consistent (single
+source), grounded (no cached belief to rot) — because state is in the queue,
+not the agent's head. The phantom-dispatch failure can't recur when "what's in
+flight" is a ledger query, not a memory.
+
+The loop closes through the same mechanism: a builder finishing IS a ticket
+state-change → wakes shadow for the inbound half (review/merge/unblock). Out and
+in are one trigger machinery; no separate "go review" path.
+
+Mechanics to nail (NEX-642):
+- **Wake coalescing/debounce** — N tickets going ready at once must not spawn N
+  shadows; a burst drains all-currently-ready, overlapping triggers collapse.
+- **Drain boundary + budget** — drain until the ready-set is empty (incl.
+  tickets that go ready mid-burst) vs snapshot-at-wake + defer late arrivals;
+  capped by the budget governor (drain until ready-empty OR budget-low). OPEN.
+
 ## Dependency: real review gating needs cairn (identity-native git)
 
 Autonomous shadow's review→merge step requires the reviewer-≠-author /
