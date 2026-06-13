@@ -146,6 +146,25 @@ source of truth.
 Reframes NEX-644: not "build a durable queue" but "workers claim ready issues
 from ledger + add skill-routing to the ready query."
 
+## Workflows are per-consumer; CATEGORIES are the generic spine (NEX-646)
+
+ledger's workflow is hardcoded today (a Go map; fixed To Do→…→Done). Make it
+CONFIGURABLE per consumer (states + transitions + DoD gates as data), with each
+state mapped to a fixed platform-owned CATEGORY (draft/ready/active/in-review/
+awaiting-merge/blocked/done/cancelled — refine in spec). **Shadow + workers key
+off CATEGORY, never the display name** — so a consumer can name/restructure
+states freely (carriedworld: preparing→ready→in-dev→code-review⇄dev→in-PR→
+ready-to-merge→merged) and orchestration stays generic. claim on category:ready;
+review on in-review; merge on awaiting-merge; close on done. The Jira/Linear
+status-category pattern.
+
+EVENT-DRIVEN WAKE (already half-designed in ledger): "Ready to Start" exists as
+the dispatch-ready signal, and workflow.go references an orchestration-redesign
+spec where the scheduler SUBSCRIBES to status_changed events rather than polling.
+That is shadow's wake spine — wake on a ledger status-change event (something
+became category:ready / awaiting-merge), not a poll loop. Find + fold in that
+spec under NEX-642/646.
+
 GENERICITY FIXES ledger needs first (the nexus-leak audit, NEX-645):
 - `assignee_aspect` (Issue + SearchFilter) → `assignee` (generic identity).
 - `ListReadyIssuesRequest.aspect` → generic: assignee + skill/capability filter.
