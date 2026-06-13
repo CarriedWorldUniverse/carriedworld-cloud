@@ -115,8 +115,43 @@ activated list empty / budget low → idle → wake when you activate more
   classes) activates it. The activation gate is where ops-detection meets
   human judgment before work fires.
 
-Needs: an "activated" ticket state (jira status/label or the dispatch-queue's
-own flag) distinct from `ready` — the explicit, ordered, per-ticket go signal.
+Needs: an "activated" ticket state distinct from `ready` — the explicit,
+ordered, per-ticket go signal.
+
+## LEDGER IS THE QUEUE (operator decision 2026-06-13)
+
+There is NO separate internal building queue — that would be the nexus-specific
+artifact the genericity principle forbids. Ledger (the CWB issues pillar) IS
+the work queue, top to bottom; it already has the claim-based primitives:
+ListReadyIssues (the ready set), ClaimIssue (atomic claim), AssignIssue,
+TransitionIssue (the status machine), parent_key (decomposition = sub-issues).
+
+Flow, one source of truth:
+```
+operator activates a ledger ticket → shadow reads ready/activated
+  → decomposes into ledger SUB-ISSUES, each skill-classified
+  → workers pull ready sub-issues (ListReadyIssues + ClaimIssue) filtered by skill
+  → TransitionIssue tracks claimed → accepted → running → done
+```
+The NEX-640 acceptance contract = ledger status transitions. Decomposition is
+visible (sub-issues under parent); claim/accept/done is visible (status). Any
+org's orchestrator + workers use the same generic ledger.
+
+Split: **ledger = generic work STATE + claim protocol** (platform pillar);
+**the runner launching k8s Jobs = carriedworld's COMPUTE** (consumer-specific,
+reads/claims from ledger, launches workers; does NOT own the queue). If
+dispatch churn ever strains ledger → a read-cache OVER ledger, never a rival
+source of truth.
+
+Reframes NEX-644: not "build a durable queue" but "workers claim ready issues
+from ledger + add skill-routing to the ready query."
+
+GENERICITY FIXES ledger needs first (the nexus-leak audit, NEX-645):
+- `assignee_aspect` (Issue + SearchFilter) → `assignee` (generic identity).
+- `ListReadyIssuesRequest.aspect` → generic: assignee + skill/capability filter.
+- Issue has NO skill/label field → add one; skill-routing needs it.
+- The "ready" predicate (status + Definition-of-Ready + deps-clear + assigned)
+  must be a DEFINED generic condition, not a free-string `status` convention.
 
 ## Decisions (operator 2026-06-13)
 
