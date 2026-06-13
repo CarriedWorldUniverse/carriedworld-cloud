@@ -69,7 +69,7 @@ spec:
           value: /var/lib/nexus/ledger.db
         - name: LEDGER_AUTH_MODE
           value: gateway
-        image: ghcr.io/carriedworlduniverse/ledger:sha-51f5538@sha256:236b66aa32ff3651c72dfdd0e2124fd07c3ce600b5ecb6aec8e595c0c4cfcae9
+        image: ghcr.io/carriedworlduniverse/ledger:sha-3f3c4a8@sha256:bcc03e5394e502d1772354ed0ae17d4502cfed423554bf33cfa4a2f148bc1a79
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
