@@ -1,0 +1,74 @@
+# model-stack: ollama — the small/medium local LLM lanes (onyx-kestrel Phase 2a).
+# One ollama instance multi-hosts the small models (Gemma E4B control,
+# EmbeddingGemma, …) on the ATOM's GB10, sharing the GPU natively. The big code
+# model gets its own vLLM pod later (GPU time-slicing added then so they
+# co-reside). Fronted by the LiteLLM gateway — nothing talks to ollama directly
+# except the gateway. Bespoke (GPU runtimeClass + nodeSelector) so it's a raw
+# manifest, not a convention-chart values file.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: model-stack
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models
+  namespace: model-stack
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: model-stack
+  labels: {app: ollama}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}   # single-writer RWO model cache
+  selector:
+    matchLabels: {app: ollama}
+  template:
+    metadata:
+      labels: {app: ollama}
+    spec:
+      # Host networking: pods on robo-dog can't use the cluster overlay/DNS
+      # (cross-node flannel doesn't tunnel over the tailnet), so ollama uses the
+      # node's network + DNS directly — pulls models, and binds robo-dog:11434 on
+      # the tailnet. The gateway addresses it by tailnet IP, not a ClusterIP.
+      hostNetwork: true
+      dnsPolicy: Default
+      runtimeClassName: nvidia            # inject the GB10 (proven via smoke test)
+      nodeSelector: {cwb/gpu: atom-gb10}  # the ATOM, not the 5090
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest     # multi-arch; arm64 on the GB10
+          ports:
+            - {name: http, containerPort: 11434}
+          env:
+            - {name: OLLAMA_HOST, value: "0.0.0.0:11434"}
+            # Keep models resident (quality-first, low concurrency) rather than
+            # unloading aggressively — the 128 GB holds the small lanes easily.
+            - {name: OLLAMA_KEEP_ALIVE, value: "-1"}
+          resources:
+            limits:
+              nvidia.com/gpu: 1   # whole GB10 for now; time-slice when vLLM joins
+          volumeMounts:
+            - {name: models, mountPath: /root/.ollama}
+      volumes:
+        - name: models
+          persistentVolumeClaim: {claimName: ollama-models}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: model-stack
+spec:
+  selector: {app: ollama}
+  ports:
+    - {name: http, port: 11434, targetPort: 11434}
