@@ -1,0 +1,8 @@
+.venv/
+corpus/
+dataset/
+adapter/
+adapter_smoke/
+merged/
+*.gguf
+__pycache__/
