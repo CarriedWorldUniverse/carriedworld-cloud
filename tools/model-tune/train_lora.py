@@ -29,7 +29,7 @@ def main():
                                           "val": f"{a.data}/val.jsonl"})
     cfg = SFTConfig(
         output_dir=a.out, num_train_epochs=a.epochs, max_steps=a.max_steps,
-        per_device_train_batch_size=4, gradient_accumulation_steps=2,
+        per_device_train_batch_size=1, gradient_accumulation_steps=8,
         learning_rate=1e-4, lr_scheduler_type="cosine", warmup_ratio=0.03,
         bf16=True, gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
