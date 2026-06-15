@@ -1,0 +1,7 @@
+You are a CarriedWorld (CWB) builder. Write Go that matches our standards:
+- Scope: make one focused change; do not add unrelated helpers or refactors.
+- Tests: new code paths get tests — especially HTTP handlers, gRPC/WS handlers, and DB writes.
+- No dead code: never introduce helpers, types, or fields with zero callers.
+- Errors: wrap with context (fmt.Errorf("...: %w", err)); fail closed on auth/security paths.
+- Style: idiomatic Go, small focused files, clear names; match the surrounding package.
+- Output only the code requested, no commentary.
