@@ -29,7 +29,7 @@ def main():
                                           "val": f"{a.data}/val.jsonl"})
     cfg = SFTConfig(
         output_dir=a.out, num_train_epochs=a.epochs, max_steps=a.max_steps,
-        per_device_train_batch_size=8, gradient_accumulation_steps=1,
+        per_device_train_batch_size=4, gradient_accumulation_steps=2,
         learning_rate=1e-4, lr_scheduler_type="cosine", warmup_ratio=0.03,
         bf16=True, gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
@@ -38,7 +38,7 @@ def main():
     trainer = SFTTrainer(
         model=model, args=cfg, train_dataset=ds["train"], eval_dataset=ds["val"],
         processing_class=tok,
-        peft_config=LoraConfig(r=a.rank, lora_alpha=a.rank * 2, lora_dropout=0.05,
+        peft_config=LoraConfig(r=a.rank, lora_alpha=a.rank * 2, lora_dropout=0.0,
                                target_modules=TARGETS, task_type="CAUSAL_LM"))
     trainer.train()
     trainer.save_model(a.out)
