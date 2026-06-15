@@ -1,0 +1,74 @@
+# model-stack: LiteLLM gateway — the single OpenAI-compatible front door
+# (onyx-kestrel Phase 1). Routes model-name -> backend; nothing talks to a model
+# backend directly. CPU-only, pinned to dMon (so the in-cluster fleet reaches it
+# via ClusterIP); it reaches the GB10 ollama over the tailnet. Frontier-escalation
+# (claude) entry is added later with a credential. Bespoke (config + nodeSelector)
+# so it's a raw manifest.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: model-stack
+data:
+  config.yaml: |
+    model_list:
+      - model_name: control            # cheap judge/classify/route lane
+        litellm_params:
+          model: openai/gemma3n:e4b
+          api_base: http://100.106.43.11:11434/v1
+          api_key: ollama
+      - model_name: embeddings
+        litellm_params:
+          model: openai/embeddinggemma
+          api_base: http://100.106.43.11:11434/v1
+          api_key: ollama
+      - model_name: code               # INTERIM placeholder on E4B until the big
+        litellm_params:                # code model (gpt-oss-120B / V4-Flash) lands
+          model: openai/gemma3n:e4b    # in Phase 2b — then just repoint this entry.
+          api_base: http://100.106.43.11:11434/v1
+          api_key: ollama
+    litellm_settings:
+      drop_params: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: model-stack
+  labels: {app: litellm}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: litellm}
+  template:
+    metadata:
+      labels: {app: litellm}
+    spec:
+      # hostNetwork so the gateway egresses from dMon's host (which can reach the
+      # GB10 ollama over the tailnet) — pod-CIDR egress to a tailnet peer doesn't
+      # route. Binds dMon:4000; the fleet reaches it via the ClusterIP (→ host) or
+      # dMon's tailnet IP directly.
+      hostNetwork: true
+      dnsPolicy: Default
+      nodeSelector: {kubernetes.io/hostname: dmonextreme}  # CPU-only, on the control-plane node
+      containers:
+        - name: litellm
+          image: ghcr.io/berriai/litellm:main-stable
+          args: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+          ports:
+            - {name: http, containerPort: 4000}
+          volumeMounts:
+            - {name: config, mountPath: /etc/litellm}
+      volumes:
+        - name: config
+          configMap: {name: litellm-config}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: model-stack
+spec:
+  selector: {app: litellm}
+  ports:
+    - {name: http, port: 4000, targetPort: 4000}
