@@ -15,17 +15,17 @@ data:
       - model_name: control            # cheap judge/classify/route lane
         litellm_params:
           model: openai/gemma3n:e4b
-          api_base: http://100.106.43.11:11434/v1
+          api_base: http://100.92.111.3:11434/v1   # robo-dog tailnet (re-IP'd after rebuild)
           api_key: ollama
       - model_name: embeddings
         litellm_params:
           model: openai/embeddinggemma
-          api_base: http://100.106.43.11:11434/v1
+          api_base: http://100.92.111.3:11434/v1
           api_key: ollama
       - model_name: code               # INTERIM placeholder on E4B until the big
         litellm_params:                # code model (gpt-oss-120B / V4-Flash) lands
           model: openai/gemma3n:e4b    # in Phase 2b — then just repoint this entry.
-          api_base: http://100.106.43.11:11434/v1
+          api_base: http://100.92.111.3:11434/v1
           api_key: ollama
     litellm_settings:
       drop_params: true
@@ -38,6 +38,7 @@ metadata:
   labels: {app: litellm}
 spec:
   replicas: 1
+  strategy: {type: Recreate}   # single hostNetwork pod on :4000 — avoid rollout port-conflict deadlock
   selector:
     matchLabels: {app: litellm}
   template:
