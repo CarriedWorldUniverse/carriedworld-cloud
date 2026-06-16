@@ -27,6 +27,11 @@ data:
           model: openai/qwen3-coder:30b # tasks @ ~9s avg (vs qwen3-next:80b 3/3 @113s,
           api_base: http://100.92.111.3:11434/v1  # gpt-oss:120b 2/3). Qwen = the open
           api_key: ollama              # local anchor; DeepSeek-V4-Flash NVFP4 = 2-DGX tier later.
+      - model_name: code-cwb           # tuned A/B candidate: qwen3-coder + CWB LoRA
+        litellm_params:                # (eval lane; promote to `code` only if it wins)
+          model: openai/qwen3-coder-cwb
+          api_base: http://100.92.111.3:11434/v1
+          api_key: ollama
     litellm_settings:
       drop_params: true
 ---
