@@ -59,9 +59,14 @@ spec:
               nvidia.com/gpu: 1   # whole GB10 for now; time-slice when vLLM joins
           volumeMounts:
             - {name: models, mountPath: /root/.ollama}
+            - {name: import, mountPath: /import, readOnly: true}
       volumes:
         - name: models
           persistentVolumeClaim: {claimName: ollama-models}
+        # Read-only host mount of the model-tune dir so `ollama create` can import
+        # host-built tuned models (tools/model-tune/merged) into the ollama store.
+        - name: import
+          hostPath: {path: /home/jacinta/model-tune, type: Directory}
 ---
 apiVersion: v1
 kind: Service
