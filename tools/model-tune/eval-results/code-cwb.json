@@ -1,0 +1,21 @@
+{
+  "model": "code-cwb",
+  "avg": 2.3333333333333335,
+  "results": [
+    {
+      "task": "must_env",
+      "score": 2,
+      "code": "func MustEnv(key string) string {\n\tv := os.Getenv(key)\n\tif v == \"\" {\n\t\tpanic(fmt.Sprintf(\"envvar %q not set\", key))\n\t}\n\treturn v\n}"
+    },
+    {
+      "task": "health_handler",
+      "score": 3,
+      "code": "func TestHealthHandler(t *testing.T) {\n\tw := httptest.NewRecorder()\n\tr := httptest.NewRequest(http.MethodGet, \"/health\", nil)\n\tHealthHandler(w, r)\n\n\tif w.Code != http.StatusOK {\n\t\tt.Errorf(\"status = %d; want 200\", w.Code)\n\t}\n\tif !strings.Contains(w.Body.String(), `\"status\":\"ok\"`) {\n\t\tt.Errorf(\"body = %q; want JSON with status ok\", w.Body.String())\n\t}\n\tif ct := w.Header().Get(\"Content-Type\"); !strings.HasPrefix(ct, \"application/json\") {\n\t\tt.Errorf(\"content-type = %q; want application/json\", ct)\n\t}\n}"
+    },
+    {
+      "task": "parse_scopes",
+      "score": 2,
+      "code": "func ParseScopes(raw string) ([]string, error) {\n\tif raw == \"\" {\n\t\treturn nil, fmt.Errorf(\"scopes: empty input\")\n\t}\n\tparts := strings.Split(raw, \",\")\n\tout := make([]string, 0, len(parts))\n\tseen := map[string]bool{}\n\tfor _, p := range parts {\n\t\ts := strings.TrimSpace(p)\n\t\tif s == \"\" {\n\t\t\treturn nil, fmt.Errorf(\"scopes: empty scope in %q\", raw)\n\t\t}\n\t\tif seen[s] {\n\t\t\tcontinue\n\t\t}\n\t\tseen[s] = true\n\t\tout = append(out, s)\n\t}\n\treturn out, nil\n}"
+    }
+  ]
+}
