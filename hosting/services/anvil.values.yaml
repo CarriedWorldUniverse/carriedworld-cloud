@@ -11,8 +11,11 @@ image: localhost/nexus-builder:dev
 command: ["/usr/local/bin/agentfunnel"]
 args: ["-k", "/etc/nexus/keyfile.json", "-context-mode", "global"]
 env:
-  OPENAI_BASE_URL: "http://gemma-ollama.nexus.svc.cluster.local:11434/v1"
-  OPENAI_API_KEY: "ollama"
+  # qwen3.6 on the ATOM (GB10) won the bake-off vs gemma (gemma NVFP4 errored), 2026-06-22.
+  # vllm-qwen36 serves OpenAI-compatible with tool-calling enabled; no API key needed.
+  OPENAI_BASE_URL: "http://vllm-qwen36.model-stack.svc.cluster.local:8000/v1"
+  OPENAI_API_KEY: "EMPTY"
+  OPENAI_MODEL: "qwen3.6"
   CW_SEAM_URL: "https://nexus.tail41686e.ts.net:7888"
 identity:
   mode: secret

@@ -1,0 +1,70 @@
+# qwen3.6 (Qwen3.6-35B-A3B-NVFP4) served by vLLM on the ATOM (Gigabyte GB10 / DGX Spark, node robo-dog).
+# NEW capability unlocked by the ATOM's arrival; recorded here 2026-06-22 (previously applied ad-hoc).
+# Multimodal (vision) + reasoning + tool-calling. Reachable: NodePort 30800 -> :8000; in-cluster
+# http://vllm-qwen36.model-stack.svc.cluster.local:8000/v1 (served-model-name "qwen3.6", no API key).
+# Tool-calling enabled 2026-06-22: --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3
+# (the model's chat_template emits <tool_call><function=..></function></tool_call> -> qwen3_xml parser).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-qwen36
+  namespace: model-stack
+  labels: { app: vllm-qwen36 }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }            # single GPU on the ATOM — never two pods contending
+  selector: { matchLabels: { app: vllm-qwen36 } }
+  template:
+    metadata: { labels: { app: vllm-qwen36 } }
+    spec:
+      runtimeClassName: nvidia
+      nodeSelector: { cwb/gpu: atom-gb10 }   # pin to the GB10 (robo-dog)
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:nightly
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--model"
+            - "/cache/Qwen3.6-35B-A3B-NVFP4"
+            - "--served-model-name"
+            - "qwen3.6"
+            - "--trust-remote-code"
+            - "--gpu-memory-utilization"
+            - "0.55"
+            - "--max-model-len"
+            - "262144"
+            - "--port"
+            - "8000"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser"
+            - "qwen3_xml"
+            - "--reasoning-parser"
+            - "qwen3"
+          env:
+            - name: HF_HUB_OFFLINE
+              value: "1"
+          ports: [{ containerPort: 8000 }]
+          resources:
+            limits: { nvidia.com/gpu: 1 }
+          volumeMounts:
+            - { name: cache, mountPath: /cache }
+            - { name: shm, mountPath: /dev/shm }
+      volumes:
+        - name: cache
+          persistentVolumeClaim: { claimName: hf-cache }
+        - name: shm
+          emptyDir: { medium: Memory, sizeLimit: 16Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-qwen36
+  namespace: model-stack
+  labels: { app: vllm-qwen36 }
+spec:
+  type: NodePort
+  selector: { app: vllm-qwen36 }
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30800
