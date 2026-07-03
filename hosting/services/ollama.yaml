@@ -54,9 +54,11 @@ spec:
             # Keep models resident (quality-first, low concurrency) rather than
             # unloading aggressively — the 128 GB holds the small lanes easily.
             - {name: OLLAMA_KEEP_ALIVE, value: "-1"}
-          resources:
-            limits:
-              nvidia.com/gpu: 1   # whole GB10 for now; time-slice when vLLM joins
+            # CPU-only (2026-07-03): embeddings for commonplace do not need the GPU;
+            # freed the GB10 slice for Ornith. Empty CUDA_VISIBLE_DEVICES forces CPU.
+            - {name: CUDA_VISIBLE_DEVICES, value: ""}
+          # CPU-only 2026-07-03 — GPU slice removed (was nvidia.com/gpu:1); GB10 is Ornith-only now.
+          resources: {}
           volumeMounts:
             - {name: models, mountPath: /root/.ollama}
             - {name: import, mountPath: /import, readOnly: true}

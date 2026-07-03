@@ -1,0 +1,47 @@
+# vLLM Gemma-4-12B-it (NVFP4) — the VISION lane (shadow eyes / vision-review) — on dMon RTX 5090.
+# Moved here 2026-07-03 off the robo-dog GB10 so Ornith owns that box. NVFP4 local model
+# (rsync-d to dMon /home/jacinta/hf-cache), served as gemma-4-12b in model-stack; litellm
+# vision/gemma-4-12b -> 100.91.185.71:30804. --enforce-eager keeps VRAM small (~16 GiB resident;
+# 5090 is shared with the render seat -> scale to 0 during heavy renders).
+# NODE PREREQ: dMon node must be labelled  cwb/gpu=dmon-5090  (kubectl label node dmonextreme cwb/gpu=dmon-5090).
+# SUPERSEDES the never-applied FP8/nexus plan in ./gemma-4-12b-vllm.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-gemma4-vision-dmon
+  namespace: model-stack
+  labels: {app: vllm-gemma4-vision-dmon}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}            # single GPU shared with render seat
+  selector: {matchLabels: {app: vllm-gemma4-vision-dmon}}
+  template:
+    metadata: {labels: {app: vllm-gemma4-vision-dmon}}
+    spec:
+      nodeSelector: {cwb/gpu: dmon-5090}
+      runtimeClassName: nvidia
+      containers:
+        - name: vllm-gemma4-vision
+          image: vllm/vllm-openai:nightly
+          args: ["--model","/cache/gemma-4-12B-it-NVFP4","--served-model-name","gemma-4-12b","--trust-remote-code","--gpu-memory-utilization","0.55","--max-model-len","32768","--enforce-eager","--port","8000"]
+          ports: [{containerPort: 8000}]
+          resources:
+            limits: {nvidia.com/gpu: 1}
+          volumeMounts:
+            - {name: cache, mountPath: /cache}
+            - {name: shm, mountPath: /dev/shm}
+      volumes:
+        - name: cache
+          hostPath: {path: /home/jacinta/hf-cache, type: Directory}
+        - name: shm
+          emptyDir: {medium: Memory, sizeLimit: 8Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-gemma4-vision-dmon
+  namespace: model-stack
+spec:
+  type: NodePort
+  selector: {app: vllm-gemma4-vision-dmon}
+  ports: [{port: 8000, targetPort: 8000, nodePort: 30804}]
