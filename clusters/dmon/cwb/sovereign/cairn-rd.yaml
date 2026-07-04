@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: cairn-rd
+  name: cairn-rd
+  namespace: cwb
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: cairn-rd
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: cairn-rd
+    spec:
+      containers:
+      - env:
+        - name: HERALD_GRPC_ADDR
+          value: herald.cwb.svc:8098
+        - name: LEDGER_GRPC_ADDR
+          value: ledger.cwb.svc:8081
+        - name: CAIRN_GRPC_ADDR
+          value: :8102
+        - name: CAIRN_HTTP_ADDR
+          value: :8100
+        - name: CAIRN_SSH_ADDR
+          value: :2222
+        - name: CAIRN_DB
+          value: /var/lib/nexus/cairn.db
+        - name: CAIRN_REPO_ROOT
+          value: /var/lib/nexus/repos
+        - name: CAIRN_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: CAIRN_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: CAIRN_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        - name: CAIRN_HOST_KEY
+          valueFrom:
+            secretKeyRef:
+              key: ssh_host_key
+              name: cairn-secrets
+        image: ghcr.io/carriedworlduniverse/cairn:main
+        imagePullPolicy: IfNotPresent
+        name: cairn
+        ports:
+        - containerPort: 8102
+          protocol: TCP
+        - containerPort: 8100
+          protocol: TCP
+        - containerPort: 2222
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: tls
+          readOnly: true
+        - mountPath: /var/lib/nexus
+          name: data
+      imagePullSecrets:
+      - name: ghcr-pull
+      nodeSelector:
+        cwb/gpu: atom-gb10
+      restartPolicy: Always
+      volumes:
+      - name: tls
+        secret:
+          defaultMode: 420
+          secretName: cairn-client-tls
+      - hostPath:
+          path: /data/sovereign/cairn
+          type: Directory
+        name: data

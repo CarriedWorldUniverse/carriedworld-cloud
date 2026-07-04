@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cairn-mirror-script
+  namespace: cwb
+data:
+  mirror.sh: |
+    #!/bin/sh
+    # cairn -> GitHub mirror. Reads cairn.db for (id,slug), pushes each bare repo
+    # to github.com/$ORG/cairn-mirror-<slug>, auto-creating the GitHub repo if missing.
+    set -e
+    ORG="${MIRROR_ORG:-CarriedWorldUniverse}"
+    REPOS=/data/sovereign/cairn/repos
+    DB=/data/sovereign/cairn/cairn.db
+    PAT="$(cat /secrets/gh_pat)"
+    # map id->slug from cairn.db (read-only)
+    python3 - "$DB" > /tmp/map.txt <<PY
+    import sqlite3,sys
+    c=sqlite3.connect("file:%s?mode=ro"%sys.argv[1],uri=True).cursor()
+    for i,s in c.execute("SELECT id,slug FROM repo").fetchall(): print(i,s)
+    PY
+    while read id slug; do
+      [ -d "$REPOS/$id.git" ] || continue
+      gh_repo="cairn-mirror-$slug"
+      echo "== mirroring $slug ($id) -> $ORG/$gh_repo =="
+      # create GitHub repo if missing (idempotent)
+      code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: token $PAT" "https://api.github.com/repos/$ORG/$gh_repo")
+      if [ "$code" = "404" ]; then
+        curl -s -X POST -H "Authorization: token $PAT" "https://api.github.com/orgs/$ORG/repos" \
+          -d "{\"name\":\"$gh_repo\",\"private\":true,\"description\":\"cairn mirror of $slug (sovereign node robo-dog)\"}" >/dev/null
+        echo "  created $ORG/$gh_repo"
+      fi
+      git -C "$REPOS/$id.git" push --mirror "https://x-access-token:$PAT@github.com/$ORG/$gh_repo.git" 2>&1 | sed -E "s#x-access-token:[^@]+@#***@#g" | tail -3
+    done < /tmp/map.txt
+    echo "mirror pass complete"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cairn-github-mirror
+  namespace: cwb
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 2
+  schedule: 23 */6 * * *
+  suspend: false
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          containers:
+          - command:
+            - sh
+            - -c
+            - apk add --no-cache git python3 curl >/dev/null 2>&1; sh /script/mirror.sh
+            image: alpine:3.20
+            imagePullPolicy: IfNotPresent
+            name: mirror
+            volumeMounts:
+            - mountPath: /script
+              name: script
+            - mountPath: /secrets
+              name: pat
+            - mountPath: /data/sovereign/cairn
+              name: data
+          nodeSelector:
+            cwb/gpu: atom-gb10
+          restartPolicy: Never
+          volumes:
+          - configMap:
+              defaultMode: 420
+              name: cairn-mirror-script
+            name: script
+          - name: pat
+            secret:
+              defaultMode: 420
+              secretName: cairn-mirror-pat
+          - hostPath:
+              path: /data/sovereign/cairn
+              type: Directory
+            name: data
