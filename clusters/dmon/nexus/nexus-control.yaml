@@ -1,0 +1,321 @@
+# =============================================================================
+# nexus-control — STEP 3 of the CWB/nexus consolidation (2026-06-27)  *** RISKIEST STEP ***
+# Plan: /home/operator/nexus-consolidation-plan-2026-06-27.md  (§3 step 3, §117 "single riskiest step")
+# Builds on: steps 1+2 LIVE (cwb-core 9/9; custodian+herald now in cwb-core, fronted by their Services).
+#
+# WHAT THIS IS:
+#   ONE Deployment (nexus-control, ns NEXUS, replicas 1, strategy Recreate,
+#   pinned to dmonextreme) that co-locates:
+#     - broker          (main container, image localhost/nexus-broker:dev, node-local)
+#     - tailscale       (sidecar, the `nexus` tailnet identity — NET_ADMIN, TS_USERSPACE=false)
+#     - tailscale-cert  (sidecar, renews nexus.tail41686e.ts.net cert every 12h)
+#     - sqld            (NATIVE ORDERED SIDECAR — initContainer + restartPolicy:Always
+#                        + startupProbe on :8080, so the broker only starts after sqld serves)
+#   and switches the broker's NEXUS_DB_DSN -> http://localhost:8080 (sqld now in-pod).
+#
+# WHY sqld-as-ordered-sidecar (folds in the startup-order ask + dodges the fatal race):
+#   The broker's storage.Open() sets NEXUS_DB_DSN -> libSQL driver, then does a
+#   db.PingContext (10s timeout) against the DSN. If sqld is unreachable, Open
+#   returns err and main.go does os.Exit(1) -> CrashLoopBackOff (the §117 fatal
+#   gate). A native sidecar (sidecar container = initContainer with
+#   restartPolicy: Always) with a startupProbe makes k8s hold the MAIN containers
+#   (incl. broker) until sqld's startupProbe passes -> sqld is already serving on
+#   localhost:8080 before the broker pings it. Race eliminated.
+#   (k8s >=1.29 native sidecars; cluster is v1.35 -> supported.)
+#
+# OPERATOR DECISIONS IN FORCE: store-is-truth; brief-downtime PVC handoff OK
+#   (only croft in active use). The broker SEAM goes down for the repod duration
+#   (no aspects can be woken until it's back) — sequence in a quiet window.
+#
+# -----------------------------------------------------------------------------
+# *** NAMESPACE + PVC — the key complication (SPELLED OUT) ***
+# -----------------------------------------------------------------------------
+# Today: broker is in ns `nexus`; sqld + sqld-data PVC are in ns `cwb`.
+# A pod is single-namespace, so one side must move. CHOSEN: nexus-control lives
+# in ns `nexus` and SQLD MOVES INTO `nexus`. Rationale (least disruptive):
+#   - The broker carries the `nexus` tailnet identity (TS_HOSTNAME=nexus,
+#     nexus.tail41686e.ts.net) and its state lives on nexus-broker-data
+#     (subPath ts-state) in ns nexus — moving the broker's ns would risk the
+#     tailnet node identity + require re-issuing TS state.
+#   - The broker's secrets (nexus-broker-env, tailscale-auth,
+#     nexus-broker-custodian-client), SA (nexus-broker), and CW_K8S_NAMESPACE=nexus
+#     (it spawns aspect Jobs IN nexus) all live in/point at nexus. The aspects
+#     dial IN to nexus. Keeping the broker in nexus preserves all of that.
+#   - sqld is a stateless libSQL server config; only its DATA must come along.
+#   So: create a NEW nexus-ns PVC `sqld-data` and COPY the libSQL data dir on the
+#   dmon host (cross-ns local-path => a COPY, not an RWO handoff). Both PVCs are
+#   local-path under /var/lib/rancher/k3s/storage on dmonextreme.
+#
+#   VERIFIED data layout (cwb sqld-data PVC root):
+#     /var/lib/rancher/k3s/storage/pvc-6fc549b0-...-_cwb_sqld-data/iku.db/
+#         {dbs/default/{data,data-wal,data-shm,wallog,...}, metastore/, .version}
+#   The libSQL "db" is the DIRECTORY `iku.db` (namespace name iku). It must land
+#   at the SAME relative path (/var/lib/sqld/iku.db) in the new PVC so sqld finds
+#   it. Copy the whole `iku.db` dir, preserving perms/ownership (uid/gid 666).
+#   (See cutover step (b) for the exact host cp; cutover step pre-flight confirms
+#   a fresh porter backup of sqld exists — porter logged source=sqld OK 18:11Z.)
+#
+# *** sqld-data nexus PVC must EXIST before this manifest is applied (the new PVC
+#   is declared at the bottom of this file as a separate object; apply it, let
+#   local-path bind it on dmon, copy data into it, THEN apply the Deployment). ***
+#
+# -----------------------------------------------------------------------------
+# CROSS-POD EDGES PRESERVED EXACTLY (do NOT loopback / do NOT hostAlias):
+#   broker -> custodian : custodian.cwb.svc:8085 over mTLS (custodian lives in
+#       cwb-core; nexus-broker-custodian-client + custodian-tls UNCHANGED). This
+#       is the one live cross-pod mTLS edge (plan §4 q1). Keep its cert mount.
+#   broker -> herald    : (if used) herald.cwb.svc — cross-pod, cluster DNS.
+#   broker -> gemma-ollama : gemma-ollama.nexus.svc:11434 (GPU pod, separate).
+#   NO hostAliases in this pod (its only co-located peer is sqld, reached by the
+#   literal DSN http://localhost:8080 — no cert/SAN involved, sqld is plaintext
+#   HTTP). custodian/herald/ollama stay cross-pod via cluster DNS.
+#
+# TLS: sqld is plaintext HTTP (SQLD_HTTP_LISTEN_ADDR=0.0.0.0:8080); the broker's
+#   libSQL DSN is http:// (no mTLS on this hop, today or after). The broker's
+#   own :7888 server TLS (tailscale cert) and broker->custodian mTLS are UNCHANGED.
+#
+# securityContext / privilege scope (plan §4 q7): NET_ADMIN + /dev/net/tun
+#   (TS_USERSPACE=false) stay scoped to the `tailscale` sidecar ONLY. sqld and
+#   broker get no extra capabilities. (tailscale uses /dev/net/tun via NET_ADMIN;
+#   the upstream image handles tun device creation — no explicit hostPath needed,
+#   matching the current working deploy which has none.)
+# =============================================================================
+---
+# (1) NEW PVC in ns nexus to receive the copied sqld data. Apply FIRST; copy
+#     data into it (cutover step b) BEFORE applying the Deployment.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sqld-data
+  namespace: nexus
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi          # matches the cwb sqld-data PVC capacity
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-control
+  namespace: nexus
+  labels:
+    app: nexus-control
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: nexus-control
+  strategy:
+    type: Recreate           # RWO PVCs (nexus-broker-data, sqld-data) + single tailnet identity
+  template:
+    metadata:
+      labels:
+        app: nexus-control
+        app.nexus/nexus-broker: "true"   # fallback label; recommended path is repointing the Service selector
+        app.nexus/sqld: "true"
+    spec:
+      # Pin to dmonextreme: the broker image is node-local (localhost/nexus-broker:dev,
+      # imagePullPolicy: Never) and both PVCs are local-path bound there.
+      nodeSelector:
+        kubernetes.io/hostname: dmonextreme
+      serviceAccountName: nexus-broker     # preserved (broker spawns aspect Jobs; RBAC bound to this SA)
+      # ----------------------------------------------------------------------
+      # NATIVE ORDERED SIDECAR: sqld as an initContainer with restartPolicy:Always.
+      # k8s starts initContainers in order; a sidecar (restartPolicy:Always) with
+      # a startupProbe blocks the MAIN containers until its startupProbe succeeds,
+      # then keeps running alongside them. => sqld is serving :8080 before broker boots.
+      # ----------------------------------------------------------------------
+      initContainers:
+        - name: sqld
+          image: ghcr.io/tursodatabase/libsql-server:latest
+          imagePullPolicy: Always
+          restartPolicy: Always            # <-- makes this a NATIVE SIDECAR (not a run-once init)
+          env:
+            - name: SQLD_HTTP_LISTEN_ADDR
+              value: 0.0.0.0:8080
+            - name: SQLD_NODE
+              value: primary
+          ports:
+            - { containerPort: 8080, name: sqld-http, protocol: TCP }
+          # startupProbe gates the broker: broker won't start until this passes.
+          startupProbe:
+            tcpSocket: { port: 8080 }       # safe: sqld listening = ready enough; the broker's libSQL ping is the real query-check
+            periodSeconds: 2
+            failureThreshold: 45           # up to ~90s for sqld to open iku.db + serve
+          livenessProbe:
+            tcpSocket: { port: 8080 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { cpu: "1",  memory: 1Gi }      # libSQL compaction can spike
+          volumeMounts:
+            - { name: sqld-data, mountPath: /var/lib/sqld }   # iku.db dir lands here (copied)
+      containers:
+        # --- tailscale sidecar: the `nexus` tailnet node identity (UNCHANGED) ----
+        - name: tailscale
+          image: ghcr.io/tailscale/tailscale:stable
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth
+                  key: TS_AUTHKEY
+            - name: TS_HOSTNAME
+              value: nexus                 # the tailnet identity — MUST stay exactly this
+            - name: TS_USERSPACE
+              value: "false"               # needs /dev/net/tun via NET_ADMIN
+            - name: TS_STATE_DIR
+              value: /var/lib/tailscale
+            - name: TS_KUBE_SECRET
+              value: ""                    # state persisted on the PVC subPath, not a k8s secret
+          securityContext:
+            capabilities:
+              add: [ "NET_ADMIN" ]         # scoped to THIS sidecar only (plan §4 q7)
+          volumeMounts:
+            - { name: ts-sock, mountPath: /tmp }
+            # Tailnet state lives on nexus-broker-data under subPath ts-state -> the
+            # `nexus` identity persists across restarts (NO migration needed; this
+            # PVC stays in ns nexus).
+            - { name: data, mountPath: /var/lib/tailscale, subPath: ts-state }
+
+        # --- tailscale-cert sidecar: renews nexus.tail41686e.ts.net cert (UNCHANGED)
+        - name: tailscale-cert
+          image: ghcr.io/tailscale/tailscale:stable
+          imagePullPolicy: IfNotPresent
+          command: [ "/bin/sh", "-c" ]
+          args:
+            - |
+              S=/tmp/tailscaled.sock
+              until tailscale --socket=$S status >/dev/null 2>&1; do echo "wait tailscaled"; sleep 3; done
+              while true; do
+                tailscale --socket=$S cert \
+                  --cert-file=/certs/tls.crt --key-file=/certs/tls.key \
+                  nexus.tail41686e.ts.net || { echo "cert failed; retry"; sleep 30; continue; }
+                echo "cert ok; sleep 12h"; sleep 43200
+              done
+          volumeMounts:
+            - { name: ts-sock, mountPath: /tmp }
+            - { name: ts-certs, mountPath: /certs }
+
+        # --- broker: the seam. NEXUS_DB_DSN -> localhost (sqld in-pod) -----------
+        - name: broker
+          image: localhost/nexus-broker:dev
+          imagePullPolicy: Never           # node-local image on dmonextreme — DO NOT change
+          command: [ "/bin/sh", "-c" ]
+          args:
+            - |
+              until [ -s /certs/tls.crt ] && [ -s /certs/tls.key ]; do echo "wait cert"; sleep 3; done
+              exec /usr/local/bin/nexus -addr :7888 \
+                -data-dir /var/lib/nexus \
+                -tls-cert /certs/tls.crt -tls-key /certs/tls.key \
+                -aspect-dir /var/lib/nexus/aspects
+          env:
+            # *** THE DSN CHANGE: sqld is now an in-pod sidecar on loopback. ***
+            # storage.Open() pings this; the sqld startupProbe guarantees it's up first.
+            - name: NEXUS_DB_DSN
+              value: http://localhost:8080
+            - name: NEXUS_ASPECT_WAKE_POLICY
+              value: plumb=wake-on-mention,anvil=wake-on-mention,harrow=wake-on-mention,keel=wake-on-mention,maren=wake-on-mention,shadow=wake-on-mention
+            - name: NEXUS_WAKE_IDLE_TIMEOUT
+              value: 15m
+            - name: NEXUS_DATA_DIR
+              value: /var/lib/nexus
+            - name: NEXUS_ASPECT_DIR
+              value: /var/lib/nexus/aspects
+            - name: CW_BUILDER_IMAGE
+              value: localhost/nexus-builder:dev
+            - name: CW_K8S_NAMESPACE
+              value: nexus                 # broker spawns aspect Jobs in nexus — UNCHANGED
+            - name: CW_NODE_IP
+              value: 10.43.138.250         # the nexus-broker Service ClusterIP — see cutover note
+            - name: CW_BROKER_HOST
+              value: nexus.tail41686e.ts.net
+            - name: CW_BRIEF_TIMEOUT
+              value: 30m
+            - name: CW_OLLAMA_BASE_URL
+              value: http://gemma-ollama.nexus.svc.cluster.local:11434   # CROSS-POD (GPU) — unchanged
+            - name: CW_OLLAMA_KEEP_ALIVE
+              value: -1s
+            # --- broker -> custodian CROSS-POD mTLS edge (custodian in cwb-core) — UNCHANGED ---
+            - name: CUSTODIAN_GRPC_ADDR
+              value: custodian.cwb.svc:8085      # cluster DNS -> cwb-core; NOT hostAliased
+            - name: CUSTODIAN_GRPC_ORG
+              value: cwb-admin
+            - name: CUSTODIAN_TLS_CERT
+              value: /etc/cwb/custodian-client/tls.crt
+            - name: CUSTODIAN_TLS_KEY
+              value: /etc/cwb/custodian-client/tls.key
+            - name: CUSTODIAN_TLS_CA
+              value: /etc/cwb/custodian-client/ca.crt
+            # --- broker -> almanac CROSS-POD mTLS edge (almanac in cwb-core) — INC-4a.
+            #     Reuses the custodian client cert: almanac authorizes by cwb-subject/
+            #     cwb-org METADATA (mdident.go), not cert CN. Enables live aspect
+            #     provider-binding reconcile; write via
+            #     `cw config set cwb/nexus/provider-bindings/<aspect>`. Dark if unset.
+            - name: ALMANAC_GRPC_ADDR
+              value: almanac.cwb.svc:8083         # cluster DNS -> cwb-core; NOT hostAliased
+            - name: ALMANAC_GRPC_ORG
+              value: 07244ac5-1fbd-4786-9301-a925f4241306   # cloud-config org (same as porter)
+            - name: ALMANAC_GRPC_SUBJECT
+              value: nexus-broker
+            - name: ALMANAC_TLS_CERT
+              value: /etc/cwb/custodian-client/tls.crt
+            - name: ALMANAC_TLS_KEY
+              value: /etc/cwb/custodian-client/tls.key
+            - name: ALMANAC_TLS_CA
+              value: /etc/cwb/custodian-client/ca.crt
+          envFrom:
+            - secretRef:
+                name: nexus-broker-env       # broker auth token + extras — UNCHANGED
+          ports:
+            - { containerPort: 7888, name: broker, protocol: TCP }
+          # No probes today (broker has none); the cert-wait wrapper + sqld
+          # startup ordering handle boot sequencing. Add a readiness probe later
+          # if desired (e.g. tcpSocket 7888) — omitted to mirror current behavior.
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: "2",  memory: 1Gi }
+          volumeMounts:
+            - { name: ts-certs, mountPath: /certs, readOnly: true }
+            - { name: data, mountPath: /var/lib/nexus }
+            - { name: custodian-client-tls, mountPath: /etc/cwb/custodian-client, readOnly: true }
+      volumes:
+        - name: ts-sock
+          emptyDir: {}
+        - name: ts-certs
+          emptyDir: {}
+        - name: custodian-client-tls
+          secret:
+            secretName: nexus-broker-custodian-client     # the cross-pod mTLS client cert — UNCHANGED
+            defaultMode: 420
+        - name: data
+          persistentVolumeClaim:
+            claimName: nexus-broker-data                  # stays in ns nexus (broker data + ts-state)
+        - name: sqld-data
+          persistentVolumeClaim:
+            claimName: sqld-data                          # the NEW nexus-ns PVC (data copied in)
+
+# =============================================================================
+# SERVICE REPOINT (step 3)
+# -----------------------------------------------------------------------------
+# Keep the nexus-broker Service NAME (aspects + tooling resolve nexus-broker.nexus.svc
+# and the tailnet host). Repoint its selector -> app: nexus-control, NUMERIC
+# targetPort 7888 (it is already numeric today — keep numeric, just change selector).
+#
+#   nexus-broker  ns nexus  :7888  selector -> {app: nexus-control}, targetPort 7888
+#
+# sqld Service (cwb, :8080): after cutover NOTHING should dial it (the broker now
+# uses localhost). LEAVE the cwb sqld Service + Deployment scaled-0 as the rollback
+# anchor; do NOT delete in step 3. (If anything else dialed sqld.cwb.svc it would
+# break — verified only the broker used it; confirm in pre-flight.)
+#
+# NOTE on CW_NODE_IP=10.43.138.250: that is the nexus-broker Service ClusterIP
+# (stable, survives the selector repoint). Preserved verbatim. If the broker uses
+# it to advertise itself to aspects, it stays valid post-repoint. FLAG: confirm
+# this is the Service IP (it is, today) and that it isn't a pod IP that would change.
+# =============================================================================

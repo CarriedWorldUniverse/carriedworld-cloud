@@ -1,0 +1,89 @@
+# Files Claude Code session transcripts into commonplace (summarised via Ornith).
+# Bounded per run (--max-sessions) so it chips the backlog without monopolising
+# the GPU; files new substantive sessions each hour. Runs on dmonextreme to share
+# the RWO croft-home local-path volume with croft-0. Org defaults in the binary.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: transcript-ingest
+  namespace: croft
+spec:
+  schedule: "17 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3000
+      template:
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: dmonextreme
+          # Gate the run until commonplace (a container in the shared cwb-core pod)
+          # is reachable — it can blip during dMon reboots. Manifest-only fix
+          # (added live 2026; the croft-home source predated it). backoffLimit 2 pairs.
+          initContainers:
+            - name: wait-commonplace
+              image: localhost/nexus-builder:dev
+              imagePullPolicy: Never
+              command:
+                - bash
+                - -c
+                - |
+                  host=commonplace.cwb.svc.cluster.local
+                  port=8101
+                  for i in $(seq 1 40); do
+                    if timeout 3 bash -c "echo > /dev/tcp/$host/$port" 2>/dev/null; then
+                      echo "commonplace $host:$port ready (attempt $i)"; exit 0
+                    fi
+                    echo "waiting for commonplace $host:$port ($i/40)"; sleep 10
+                  done
+                  echo "commonplace $host:$port not reachable after ~400s; giving up"; exit 1
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 200m
+                  memory: 64Mi
+          containers:
+            - name: ingest
+              image: localhost/nexus-builder:dev
+              imagePullPolicy: Never
+              command: ["/home/operator/local/transcript-ingest/transcript-ingest"]
+              args: ["--min-idle-min", "15", "--max-sessions", "25", "--min-bytes", "100000"]
+              env:
+                - name: HOME
+                  value: /home/operator
+                - name: CW_APP_TLS_CERT
+                  value: /etc/cw-app-tls/tls.crt
+                - name: CW_APP_TLS_KEY
+                  value: /etc/cw-app-tls/tls.key
+                - name: CW_APP_TLS_CA
+                  value: /etc/cw-app-tls/ca.crt
+                - name: CW_APP_SUBJECT
+                  value: croft
+                - name: ORNITH_BASE_URL
+                  value: http://100.92.111.3:30801/v1
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+              volumeMounts:
+                - name: home
+                  mountPath: /home/operator
+                - name: cw-app-tls
+                  mountPath: /etc/cw-app-tls
+                  readOnly: true
+          volumes:
+            - name: home
+              persistentVolumeClaim:
+                claimName: croft-home
+            - name: cw-app-tls
+              secret:
+                secretName: cw-app-tls

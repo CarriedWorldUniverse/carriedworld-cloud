@@ -1,0 +1,749 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: cwb-core
+  name: cwb-core
+  namespace: cwb
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: cwb-core
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: cwb-core
+        app.cwb/almanac: "true"
+        app.cwb/cairn: "true"
+        app.cwb/commonplace: "true"
+        app.cwb/custodian: "true"
+        app.cwb/herald: "true"
+        app.cwb/interchange-gateway: "true"
+        app.cwb/ledger: "true"
+        app.cwb/mason: "true"
+        app.cwb/porter-backup: "true"
+    spec:
+      containers:
+      - env:
+        - name: LEDGER_GRPC_ADDR
+          value: ledger.cwb.svc:8081
+        - name: HERALD_GRPC_ADDR
+          value: herald.cwb.svc:8098
+        - name: CAIRN_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: CAIRN_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: CAIRN_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        - name: CAIRN_GRPC_ADDR
+          value: :8102
+        - name: CAIRN_HTTP_ADDR
+          value: :8100
+        - name: CAIRN_SSH_ADDR
+          value: :2222
+        - name: CAIRN_DB
+          value: /var/lib/nexus/cairn.db
+        - name: CAIRN_REPO_ROOT
+          value: /var/lib/nexus/repos
+        - name: HERALD_BASE_URL
+          value: http://herald.cwb.svc:8099
+        - name: LEDGER_BASE_URL
+          value: http://ledger.cwb.svc:8081
+        - name: CAIRN_HOST_KEY
+          valueFrom:
+            secretKeyRef:
+              key: ssh_host_key
+              name: cairn-secrets
+        - name: COMMONPLACE_EMBED_URL
+          value: http://ollama.model-stack.svc.cluster.local:11434
+        image: ghcr.io/carriedworlduniverse/cairn:sha-ae4e9a1@sha256:9237b630412c32767e3d457dbfa3eed4522e04818e92d608b3d6792abb5ec88e
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: cairn-http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: cairn
+        ports:
+        - containerPort: 8102
+          name: cairn-grpc
+          protocol: TCP
+        - containerPort: 8100
+          name: cairn-http
+          protocol: TCP
+        - containerPort: 2222
+          name: cairn-ssh
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: cairn-http
+            scheme: HTTP
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 96Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: cairn-tls
+          readOnly: true
+        - mountPath: /var/lib/nexus
+          name: cairn-data
+      - env:
+        - name: LEDGER_GRPC_ADDR
+          value: :8081
+        - name: LEDGER_ADDR
+          value: :8081
+        - name: LEDGER_AUTH_MODE
+          value: gateway
+        - name: LEDGER_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: LEDGER_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: LEDGER_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        - name: LEDGER_DB
+          value: /var/lib/ledger/ledger.db
+        - name: COMMONPLACE_EMBED_URL
+          value: http://ollama.model-stack.svc.cluster.local:11434
+        image: ghcr.io/carriedworlduniverse/ledger:sha-c2c4c6f@sha256:1958290b9f477f5f72c05e22b1215ea108f8dcbdda5b2d41657f094851f00f40
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          successThreshold: 1
+          tcpSocket:
+            port: 8081
+          timeoutSeconds: 1
+        name: ledger
+        ports:
+        - containerPort: 8081
+          name: ledger-http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: 8081
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 48Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: ledger-tls
+          readOnly: true
+        - mountPath: /var/lib/ledger
+          name: ledger-data
+      - env:
+        - name: COMMONPLACE_GRPC_ADDR
+          value: :8101
+        - name: COMMONPLACE_ADDR
+          value: :8101
+        - name: COMMONPLACE_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: COMMONPLACE_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: COMMONPLACE_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        - name: COMMONPLACE_DB
+          value: /var/lib/cwb/commonplace.db
+        - name: COMMONPLACE_EMBED_PROVIDER
+          value: ollama
+        - name: COMMONPLACE_EMBED_URL
+          value: http://127.0.0.1:11434
+        - name: COMMONPLACE_EMBED_MODEL
+          value: nomic-embed-text
+        - name: COMMONPLACE_EMBED_DIM
+          value: "768"
+        image: ghcr.io/carriedworlduniverse/commonplace:sha-d99e37b@sha256:ff64559a4c8be69ccd63b73a4bf907889355639ffb9e0e6043e4be7fc58a2d3a
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          successThreshold: 1
+          tcpSocket:
+            port: 8101
+          timeoutSeconds: 1
+        name: commonplace
+        ports:
+        - containerPort: 8101
+          name: cmnpl-http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: 8101
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 25m
+            memory: 64Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: commonplace-tls
+          readOnly: true
+        - mountPath: /var/lib/cwb
+          name: commonplace-data
+      - command:
+        - /bin/sh
+        - -c
+        - ollama serve & PID=$!; sleep 4; ollama pull nomic-embed-text || true; wait
+          $PID
+        env:
+        - name: OLLAMA_HOST
+          value: 127.0.0.1:11434
+        - name: OLLAMA_KEEP_ALIVE
+          value: "-1"
+        - name: CUDA_VISIBLE_DEVICES
+        image: ollama/ollama:latest
+        imagePullPolicy: Always
+        name: embed
+        resources:
+          limits:
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /root/.ollama
+          name: embed-models
+      - env:
+        - name: MASON_GRPC_ADDR
+          value: :8086
+        - name: MASON_ALMANAC_ADDR
+          value: almanac.cwb.svc.cluster.local:8083
+        - name: MASON_ALMANAC_ORG
+          value: carriedworld
+        - name: MASON_TLS_CERT
+          value: /etc/mason/tls/tls.crt
+        - name: MASON_TLS_KEY
+          value: /etc/mason/tls/tls.key
+        - name: MASON_TLS_CA
+          value: /etc/mason/tls/ca.crt
+        - name: MASON_CLIENT_TLS_CERT
+          value: /etc/mason/tls/tls.crt
+        - name: MASON_CLIENT_TLS_KEY
+          value: /etc/mason/tls/tls.key
+        - name: MASON_CLIENT_TLS_CA
+          value: /etc/mason/tls/ca.crt
+        - name: COMMONPLACE_EMBED_URL
+          value: http://ollama.model-stack.svc.cluster.local:11434
+        image: ghcr.io/carriedworlduniverse/mason:sha-1cb7717@sha256:86e94eb6d8b2f04f0e75ca0f2dab6cf8211519445ad1bb97f025a100f765d89b
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          successThreshold: 1
+          tcpSocket:
+            port: 8086
+          timeoutSeconds: 1
+        name: mason
+        ports:
+        - containerPort: 8086
+          name: mason-grpc
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: 8086
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 48Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/mason/tls
+          name: mason-tls
+          readOnly: true
+      - env:
+        - name: INTERCHANGE_ADDR
+          value: :8080
+        - name: INTERCHANGE_ROUTES
+          value: /herald=http://herald.cwb.svc:8099,/cairn=http://cairn.cwb.svc:8100
+        - name: INTERCHANGE_HERALD_ISSUER
+          value: http://dmonextreme.tail41686e.ts.net:8080/herald/
+        - name: INTERCHANGE_HERALD_JWKS_URL
+          value: http://herald.cwb.svc:8099/jwks
+        - name: INTERCHANGE_PUBLIC_PATHS
+          value: /herald/.well-known/,/herald/jwks,/herald/token
+        - name: INTERCHANGE_COMMONPLACE_GRPC
+          value: commonplace.cwb.svc:8101
+        - name: INTERCHANGE_LEDGER_GRPC
+          value: ledger.cwb.svc:8081
+        - name: INTERCHANGE_CAIRN_GRPC
+          value: cairn.cwb.svc:8102
+        - name: INTERCHANGE_MASON_GRPC
+          value: mason.cwb.svc.cluster.local:8086
+        - name: INTERCHANGE_HERALD_GRPC
+          value: herald.cwb.svc:8098
+        - name: INTERCHANGE_ALMANAC_GRPC
+          value: almanac.cwb.svc.cluster.local:8083
+        - name: INTERCHANGE_ATLAS_GRPC
+          value: atlas.cwb.svc.cluster.local:8089
+        - name: INTERCHANGE_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: INTERCHANGE_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: INTERCHANGE_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        - name: COMMONPLACE_EMBED_URL
+          value: http://ollama.model-stack.svc.cluster.local:11434
+        image: ghcr.io/carriedworlduniverse/interchange-gateway:sha-4fbf74b@sha256:9b3e2d66de5070256b2f01030650091e42a5075b415e4a7bcd26b1bbb21e4757
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: gw-http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: gateway
+        ports:
+        - containerPort: 8080
+          name: gw-http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: gw-http
+            scheme: HTTP
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: "1"
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 64Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: interchange-tls
+          readOnly: true
+      - env:
+        - name: ALMANAC_GRPC_ADDR
+          value: :8083
+        - name: ALMANAC_DB
+          value: /var/lib/almanac/almanac.db
+        - name: ALMANAC_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: ALMANAC_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: ALMANAC_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        - name: ALMANAC_ORG_SEED
+          valueFrom:
+            secretKeyRef:
+              key: ALMANAC_ORG_SEED
+              name: almanac-org-seed
+        - name: COMMONPLACE_EMBED_URL
+          value: http://ollama.model-stack.svc.cluster.local:11434
+        image: ghcr.io/carriedworlduniverse/almanac:sha-947a05e@sha256:59e4c2535e8ea0b57ed56d9686be9c2a2ed09c4c67ec070d37e5c02ec41c2cbf
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          successThreshold: 1
+          tcpSocket:
+            port: 8083
+          timeoutSeconds: 1
+        name: almanac
+        ports:
+        - containerPort: 8083
+          name: almanac-grpc
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: 8083
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 48Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: almanac-tls
+          readOnly: true
+        - mountPath: /var/lib/almanac
+          name: almanac-data
+      - env:
+        - name: CUSTODIAN_GRPC_ADDR
+          value: :8085
+        - name: CUSTODIAN_DB
+          value: /var/lib/custodian/custodian.db
+        - name: CUSTODIAN_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: CUSTODIAN_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: CUSTODIAN_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        - name: CUSTODIAN_ORG_SEED
+          valueFrom:
+            secretKeyRef:
+              key: CUSTODIAN_ORG_SEED
+              name: custodian-org-seed
+        - name: COMMONPLACE_EMBED_URL
+          value: http://ollama.model-stack.svc.cluster.local:11434
+        image: ghcr.io/carriedworlduniverse/custodian:sha-6e40797@sha256:13ec27ecb1ef5740f61cf954692570e9032f0022e7441d48e07b84b6dc605cb8
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          successThreshold: 1
+          tcpSocket:
+            port: 8085
+          timeoutSeconds: 1
+        name: custodian
+        ports:
+        - containerPort: 8085
+          name: custodian-grpc
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: 8085
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 48Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: custodian-tls
+          readOnly: true
+        - mountPath: /var/lib/custodian
+          name: custodian-data
+      - env:
+        - name: HERALD_ADDR
+          value: :8099
+        - name: HERALD_GRPC_ADDR
+          value: :8098
+        - name: HERALD_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: HERALD_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: HERALD_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        - name: HERALD_DB
+          value: /var/lib/herald/herald.db
+        - name: HERALD_ISSUER
+          value: http://dmonextreme.tail41686e.ts.net:8080/herald/
+        - name: HERALD_OIDC_CLIENTS
+          value: atlas|https://atlas.tail41686e.ts.net/oauth/callback
+        - name: HERALD_GATEWAY_URL
+          value: http://interchange-gateway.cwb.svc:8080
+        - name: HERALD_SIGNING_KEY
+          valueFrom:
+            secretKeyRef:
+              key: signing_key
+              name: herald-secrets
+              optional: true
+        - name: HERALD_GENESIS_OWNER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: genesis_owner_password
+              name: herald-secrets
+              optional: true
+        - name: COMMONPLACE_EMBED_URL
+          value: http://ollama.model-stack.svc.cluster.local:11434
+        image: ghcr.io/carriedworlduniverse/herald:sha-2a9b631@sha256:5d8559006f68382b9c33f8724620e92523d7c18572dec8b703ac755bf25c391c
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: herald-http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: herald
+        ports:
+        - containerPort: 8099
+          name: herald-http
+          protocol: TCP
+        - containerPort: 8098
+          name: herald-grpc
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: herald-http
+            scheme: HTTP
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: herald-tls
+          readOnly: true
+        - mountPath: /var/lib/herald
+          name: herald-data
+      - args:
+        - sync
+        env:
+        - name: PORTER_ALMANAC_GRPC_ADDR
+          value: almanac.cwb.svc.cluster.local:8083
+        - name: PORTER_ALMANAC_PARAM
+          value: cwb/porter/backup/sources
+        - name: PORTER_DRIVE_FOLDER
+          value: CarriedWorld-Porter/backups
+        - name: PORTER_INTERVAL
+          value: 6h
+        - name: PORTER_RECIPIENTS
+          value: nkRv85B3NZCIPisbTAR5xe/Ru8dIq9TcsMs2Lf0dLW8=,GCIrPC3XNio56jGuAO6/x+h8uZ7j35iVvNJZT+oqz0M=
+        - name: CUSTODIAN_GRPC_ADDR
+          value: custodian.cwb.svc.cluster.local:8085
+        - name: CUSTODIAN_ORG
+          value: 07244ac5-1fbd-4786-9301-a925f4241306
+        - name: PORTER_TLS_CERT
+          value: /etc/porter/tls/tls.crt
+        - name: PORTER_TLS_KEY
+          value: /etc/porter/tls/tls.key
+        - name: PORTER_TLS_CA
+          value: /etc/porter/tls/ca.crt
+        - name: PORTER_GRPC_ADDR
+          value: :8087
+        - name: PORTER_SERVER_TLS_CERT
+          value: /etc/porter/server-tls/tls.crt
+        - name: PORTER_SERVER_TLS_KEY
+          value: /etc/porter/server-tls/tls.key
+        - name: PORTER_SERVER_TLS_CA
+          value: /etc/porter/server-tls/ca.crt
+        - name: TMPDIR
+          value: /work
+        - name: PORTER_DRIVE_OAUTH_FILE
+          value: /etc/porter/drive/oauth.json
+        - name: COMMONPLACE_EMBED_URL
+          value: http://ollama.model-stack.svc.cluster.local:11434
+        image: ghcr.io/carriedworlduniverse/porter-backup:sha-1dfbeae
+        imagePullPolicy: IfNotPresent
+        name: porter-backup
+        ports:
+        - containerPort: 8087
+          name: porter-grpc
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 500m
+            memory: 2Gi
+          requests:
+            cpu: 25m
+            memory: 256Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/porter/drive
+          name: porter-drive-oauth
+          readOnly: true
+        - mountPath: /hoststorage
+          name: porter-hoststorage
+          readOnly: true
+        - mountPath: /etc/porter/tls
+          name: porter-client-tls
+          readOnly: true
+        - mountPath: /etc/porter/server-tls
+          name: porter-server-tls
+          readOnly: true
+        - mountPath: /work
+          name: porter-work
+      dnsPolicy: ClusterFirst
+      hostAliases:
+      - hostnames:
+        - cairn
+        - cairn.cwb.svc
+        - cairn.cwb.svc.cluster.local
+        - ledger
+        - ledger.cwb.svc
+        - ledger.cwb.svc.cluster.local
+        - commonplace
+        - commonplace.cwb.svc
+        - commonplace.cwb.svc.cluster.local
+        - mason
+        - mason.cwb.svc
+        - mason.cwb.svc.cluster.local
+        - interchange-gateway
+        - interchange-gateway.cwb.svc
+        - interchange-gateway.cwb.svc.cluster.local
+        - almanac
+        - almanac.cwb.svc
+        - almanac.cwb.svc.cluster.local
+        - custodian
+        - custodian.cwb.svc
+        - custodian.cwb.svc.cluster.local
+        - herald
+        - herald.cwb.svc
+        - herald.cwb.svc.cluster.local
+        ip: 127.0.0.1
+      imagePullSecrets:
+      - name: ghcr-pull
+      nodeSelector:
+        kubernetes.io/hostname: dmonextreme
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: porter-backup
+      serviceAccountName: porter-backup
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: embed-models
+        persistentVolumeClaim:
+          claimName: embed-models
+      - name: cairn-tls
+        secret:
+          defaultMode: 420
+          secretName: cairn-client-tls
+      - name: ledger-tls
+        secret:
+          defaultMode: 420
+          secretName: ledger-tls
+      - name: commonplace-tls
+        secret:
+          defaultMode: 420
+          secretName: commonplace-tls
+      - name: mason-tls
+        secret:
+          defaultMode: 420
+          secretName: mason-tls
+      - name: interchange-tls
+        secret:
+          defaultMode: 420
+          secretName: interchange-client-tls
+      - name: almanac-tls
+        secret:
+          defaultMode: 420
+          secretName: almanac-tls
+      - name: custodian-tls
+        secret:
+          defaultMode: 420
+          secretName: custodian-tls
+      - name: herald-tls
+        secret:
+          defaultMode: 420
+          secretName: herald-tls
+      - name: porter-client-tls
+        secret:
+          defaultMode: 420
+          secretName: porter-backup-client-tls
+      - name: porter-server-tls
+        secret:
+          defaultMode: 420
+          secretName: porter-backup-tls
+      - name: porter-drive-oauth
+        secret:
+          defaultMode: 384
+          secretName: porter-drive-oauth
+      - name: cairn-data
+        persistentVolumeClaim:
+          claimName: cairn-data
+      - name: ledger-data
+        persistentVolumeClaim:
+          claimName: ledger-data
+      - name: commonplace-data
+        persistentVolumeClaim:
+          claimName: commonplace-data
+      - name: almanac-data
+        persistentVolumeClaim:
+          claimName: almanac-data
+      - name: custodian-data
+        persistentVolumeClaim:
+          claimName: custodian-data
+      - name: herald-data
+        persistentVolumeClaim:
+          claimName: herald-data
+      - hostPath:
+          path: /var/lib/rancher/k3s/storage
+          type: Directory
+        name: porter-hoststorage
+      - emptyDir:
+          sizeLimit: 8Gi
+        name: porter-work
