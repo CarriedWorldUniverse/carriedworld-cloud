@@ -1,45 +1,82 @@
-# vLLM Ornith-1.0-35B (NVFP4) — the OWNED code/general brain — on the ATOM (robo-dog GB10).
-# SOLE GPU tenant since 2026-07-03 (vision moved to dMon 5090, ollama moved to CPU):
-# --gpu-memory-utilization 0.85 -> KV cache ~74 GiB, ~14.6x concurrency @256K ctx.
-# See memory reference_ornith_concurrency. Applied live ad-hoc before this file existed;
-# committed 2026-07-03 to make it reproducible. Assumes the existing hf-cache PVC (holds /cache models).
+# Ornith-1.0-35B-NVFP4 (Qwen3.5-MoE hybrid GDN) served by vLLM on robo-dog
+# (GB10 / ATOM, sm_121). Namespace: model-stack. NodePort 30801; litellm and
+# claude-ornith front it. Sole GPU tenant since 2026-07-03 (gpu-mem-util 0.85,
+# vision moved to dMon).
+#
+# --enable-prefix-caching (2026-07-06): vLLM disables APC by default for
+# hybrid GDN models; forcing it on selects the experimental Mamba-cache
+# "align" mode (chunked prefill required — on by default). Measured on the
+# live pod: repeated 25K-token prefix TTFT 22.9s -> 0.2s. Without it every
+# agent turn re-prefills the whole conversation.
+#
+# IMAGE: pinned by digest — "nightly" drifts, and hybrid-APC behaviour and
+# the qwen3 parsers are version-sensitive. This digest = the build validated
+# 2026-07-06. Bump deliberately, then re-run the repeated-prefix TTFT check.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vllm-ornith
   namespace: model-stack
-  labels: {app: vllm-ornith}
+  labels: { app: vllm-ornith }
 spec:
   replicas: 1
-  strategy: {type: Recreate}              # single GPU (~99 GiB) — never two pods contending
-  selector: {matchLabels: {app: vllm-ornith}}
+  strategy: { type: Recreate }          # single GPU — never two pods contending
+  selector: { matchLabels: { app: vllm-ornith } }
   template:
-    metadata: {labels: {app: vllm-ornith}}
+    metadata: { labels: { app: vllm-ornith } }
     spec:
-      runtimeClassName: nvidia            # nvidia runtime is per-pod, not the cluster default
-      nodeSelector: {cwb/gpu: atom-gb10}  # the ATOM GB10, not the 5090
+      runtimeClassName: nvidia          # nvidia runtime is NOT the cluster default
+      nodeSelector: { cwb/gpu: atom-gb10 }
       containers:
         - name: vllm-ornith
-          image: vllm/vllm-openai:nightly
-          args: ["--model","/cache/Ornith-1.0-35B-NVFP4","--served-model-name","ornith","--trust-remote-code","--gpu-memory-utilization","0.85","--max-model-len","262144","--port","8000","--enable-auto-tool-choice","--tool-call-parser","qwen3_xml","--reasoning-parser","qwen3"]
-          ports: [{containerPort: 8000}]
+          image: vllm/vllm-openai@sha256:44ce83c016728310eda1870d215edb8874cfb5ab56f577e7f4c86acdc11e1e34
+          imagePullPolicy: IfNotPresent
+          args:
+            - --model
+            - /cache/Ornith-1.0-35B-NVFP4
+            - --served-model-name
+            - ornith
+            - --trust-remote-code
+            - --gpu-memory-utilization
+            - "0.85"
+            - --max-model-len
+            - "262144"
+            - --port
+            - "8000"
+            - --enable-auto-tool-choice
+            - --tool-call-parser
+            - qwen3_xml
+            - --reasoning-parser
+            - qwen3
+            - --enable-prefix-caching
+          env:
+            - name: HF_HUB_OFFLINE
+              value: "1"
+          ports:
+            - containerPort: 8000
           resources:
-            limits: {nvidia.com/gpu: 1}
+            limits:
+              nvidia.com/gpu: "1"
           volumeMounts:
-            - {name: cache, mountPath: /cache}
-            - {name: shm, mountPath: /dev/shm}
+            - { mountPath: /cache, name: cache }
+            - { mountPath: /dev/shm, name: shm }
       volumes:
         - name: cache
-          persistentVolumeClaim: {claimName: hf-cache}
+          persistentVolumeClaim: { claimName: hf-cache }
         - name: shm
-          emptyDir: {medium: Memory, sizeLimit: 16Gi}
+          emptyDir: { medium: Memory, sizeLimit: 16Gi }
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: vllm-ornith
   namespace: model-stack
+  labels: { app: vllm-ornith }
 spec:
   type: NodePort
-  selector: {app: vllm-ornith}
-  ports: [{port: 8000, targetPort: 8000, nodePort: 30801}]
+  selector: { app: vllm-ornith }
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30801
+      protocol: TCP
