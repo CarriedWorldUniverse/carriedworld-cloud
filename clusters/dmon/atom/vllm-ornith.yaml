@@ -1,0 +1,45 @@
+# vLLM Ornith-1.0-35B (NVFP4) — the OWNED code/general brain — on the ATOM (robo-dog GB10).
+# SOLE GPU tenant since 2026-07-03 (vision moved to dMon 5090, ollama moved to CPU):
+# --gpu-memory-utilization 0.85 -> KV cache ~74 GiB, ~14.6x concurrency @256K ctx.
+# See memory reference_ornith_concurrency. Applied live ad-hoc before this file existed;
+# committed 2026-07-03 to make it reproducible. Assumes the existing hf-cache PVC (holds /cache models).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-ornith
+  namespace: model-stack
+  labels: {app: vllm-ornith}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}              # single GPU (~99 GiB) — never two pods contending
+  selector: {matchLabels: {app: vllm-ornith}}
+  template:
+    metadata: {labels: {app: vllm-ornith}}
+    spec:
+      runtimeClassName: nvidia            # nvidia runtime is per-pod, not the cluster default
+      nodeSelector: {cwb/gpu: atom-gb10}  # the ATOM GB10, not the 5090
+      containers:
+        - name: vllm-ornith
+          image: vllm/vllm-openai:nightly
+          args: ["--model","/cache/Ornith-1.0-35B-NVFP4","--served-model-name","ornith","--trust-remote-code","--gpu-memory-utilization","0.85","--max-model-len","262144","--port","8000","--enable-auto-tool-choice","--tool-call-parser","qwen3_xml","--reasoning-parser","qwen3"]
+          ports: [{containerPort: 8000}]
+          resources:
+            limits: {nvidia.com/gpu: 1}
+          volumeMounts:
+            - {name: cache, mountPath: /cache}
+            - {name: shm, mountPath: /dev/shm}
+      volumes:
+        - name: cache
+          persistentVolumeClaim: {claimName: hf-cache}
+        - name: shm
+          emptyDir: {medium: Memory, sizeLimit: 16Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-ornith
+  namespace: model-stack
+spec:
+  type: NodePort
+  selector: {app: vllm-ornith}
+  ports: [{port: 8000, targetPort: 8000, nodePort: 30801}]
