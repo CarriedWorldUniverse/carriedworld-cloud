@@ -3,11 +3,18 @@
 # claude-ornith front it. Sole GPU tenant since 2026-07-03 (gpu-mem-util 0.85,
 # vision moved to dMon).
 #
-# --enable-prefix-caching (2026-07-06): vLLM disables APC by default for
-# hybrid GDN models; forcing it on selects the experimental Mamba-cache
-# "align" mode (chunked prefill required — on by default). Measured on the
-# live pod: repeated 25K-token prefix TTFT 22.9s -> 0.2s. Without it every
-# agent turn re-prefills the whole conversation.
+# PREFIX CACHING (APC): OFF since 2026-07-09. It was enabled 2026-07-06
+# (repeated 25K-token prefix TTFT 22.9s -> 0.2s), but the experimental
+# hybrid-GDN Mamba-cache "align" mode HARD-WEDGES the engine under
+# CONCURRENT requests: with 2 concurrent builder prefills the engine froze
+# (stats logger stuck at "Running: 2 reqs" / 0.0 tok/s forever; every later
+# request hung until a pod restart). Reproduced twice on the pool's
+# concurrent-pair validation (2026-07-09); with APC removed the same pair
+# ran clean (2 reqs @ ~3.5K tok/s prefill, both completed). Cost of OFF:
+# every turn re-prefills the conversation (~23s at 25K tokens).
+# RE-ENABLE ONLY with a newer validated vLLM digest AND a 2-concurrent
+# long-prefill soak test passing (see shadow memory
+# reference_ornith_prefix_caching for the incident record).
 #
 # IMAGE: pinned by digest — "nightly" drifts, and hybrid-APC behaviour and
 # the qwen3 parsers are version-sensitive. This digest = the build validated
@@ -48,7 +55,7 @@ spec:
             - qwen3_xml
             - --reasoning-parser
             - qwen3
-            - --enable-prefix-caching
+            # --enable-prefix-caching intentionally ABSENT — see APC note above.
           env:
             - name: HF_HUB_OFFLINE
               value: "1"
