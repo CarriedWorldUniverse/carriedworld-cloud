@@ -52,6 +52,10 @@
   type: tar
   path: /hoststorage/pvc-5758965b-92b8-4003-9af3-70b03bc73936_croft_croft-home
   excludes:
+    - ".local/**"          # ~96G re-creatable XDG data/state
+    - "node_modules/**"     # re-installable
+    - ".codex/**"           # codex agent state, re-creatable
+    - ".mem-backup/**"      # already mirrored to GitHub (shadow-memory)
     - "src/**"         # re-clonable repo caches — excluded by the operator principle
     - "work/**"
     - "go/**"
@@ -60,3 +64,5 @@
     - ".local/share/claude/**"   # reinstallable
     - "shadow/porter-recovery.key"        # NEVER: decrypts these very backups
     - "shadow/google_oauth_client.json"   # re-creatable in Google console
+
+
