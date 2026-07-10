@@ -55,6 +55,10 @@ spec:
             - qwen3_xml
             - --reasoning-parser
             - qwen3
+            # usage reporting: surfaces prompt_tokens_details.cached_tokens so
+            # clients (ctxmap bench cache-hit%) can measure prefix-cache hits.
+            # Reads 0 while APC is OFF; becomes meaningful when APC returns.
+            - --enable-prompt-tokens-details
             # --enable-prefix-caching intentionally ABSENT — see APC note above.
           env:
             - name: HF_HUB_OFFLINE
