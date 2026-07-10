@@ -17,12 +17,6 @@
     - { ns: croft, name: croft-gh-token }
     - { ns: croft, name: croft-ssh-pubkey }
     - { ns: nexus, name: nexus-broker-env }
-    - { ns: nexus, name: aspect-keyfile-anvil }
-    - { ns: nexus, name: aspect-keyfile-harrow }
-    - { ns: nexus, name: aspect-keyfile-keel }
-    - { ns: nexus, name: aspect-keyfile-maren }
-    - { ns: nexus, name: aspect-keyfile-plumb }
-    - { ns: nexus, name: aspect-keyfile-shadow }
     - { ns: nexus, name: observer-keyfile }
     - { ns: nexus, name: lynxai-env }
     - { ns: nexus, name: hosting-git-token }
@@ -39,6 +33,9 @@
 - name: ledger
   type: sqlite
   path: /hoststorage/pvc-039cf2f0-cd1c-43d0-9860-8b381ffde3c1_cwb_ledger-data/ledger.db
+- name: commonplace
+  type: sqlite
+  path: /hoststorage/pvc-1a6af55b-2cbc-4290-bd5b-813e16a7cb3f_cwb_commonplace-data/commonplace.db
 - name: cairn-db
   type: sqlite
   path: /hoststorage/pvc-e34ae563-c8ad-4826-8a03-dd25ed8a149b_cwb_cairn-data/cairn.db
@@ -51,18 +48,24 @@
 - name: croft-home
   type: tar
   path: /hoststorage/pvc-5758965b-92b8-4003-9af3-70b03bc73936_croft_croft-home
+  # ALLOWLIST (not a block-list): croft home is a ~50G tree that is ~99%
+  # re-creatable (model weights, build/module caches, repo clones re-clonable
+  # from cairn/GitHub). Back up ONLY the irreplaceable, not-in-repos state
+  # (~180M measured). Anything new is ignored by DEFAULT — a new big dir can no
+  # longer silently balloon the tar past the 8Gi work volume and OOM-evict the
+  # pod (the failure that hid for weeks). max_bytes is the fail-loud backstop.
+  includes:
+    - "*.md"          # shadow's off-git design docs (~/*.md) — not in any repo
+    - ".claude"       # skills, agents, CLAUDE.md, and the memory .md (transcripts dropped below)
+    - ".config"       # tool/app config
+    - ".ctxmap"       # ctxmap working memory (project state)
+    - ".mem-backup"   # memory mirror staging (redundant w/ GitHub shadow-memory; kept belt-and-suspenders)
+    - "shadow"        # design docs / research / tools (renders + secrets dropped below)
   excludes:
-    - ".local/**"          # ~96G re-creatable XDG data/state
-    - "node_modules/**"     # re-installable
-    - ".codex/**"           # codex agent state, re-creatable
-    - ".mem-backup/**"      # already mirrored to GitHub (shadow-memory)
-    - "src/**"         # re-clonable repo caches — excluded by the operator principle
-    - "work/**"
-    - "go/**"
-    - ".cache/**"
-    - ".npm/**"
-    - ".local/share/claude/**"   # reinstallable
+    - ".claude/projects/**/*.jsonl"       # ~1G session transcripts — re-creatable; the memory .md alongside them is kept
+    - "shadow/snap_archive"               # ~156M re-renderable game snapshot PNGs
     - "shadow/porter-recovery.key"        # NEVER: decrypts these very backups
     - "shadow/google_oauth_client.json"   # re-creatable in Google console
+  max_bytes: 2147483648   # 2 GiB fail-loud guard (~11x the expected ~180M; still well under the 8Gi work cap)
 
 
