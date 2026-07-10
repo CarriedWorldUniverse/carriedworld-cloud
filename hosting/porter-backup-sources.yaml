@@ -33,6 +33,9 @@
 - name: ledger
   type: sqlite
   path: /hoststorage/pvc-039cf2f0-cd1c-43d0-9860-8b381ffde3c1_cwb_ledger-data/ledger.db
+- name: commonplace
+  type: sqlite
+  path: /hoststorage/pvc-1a6af55b-2cbc-4290-bd5b-813e16a7cb3f_cwb_commonplace-data/commonplace.db
 - name: cairn-db
   type: sqlite
   path: /hoststorage/pvc-e34ae563-c8ad-4826-8a03-dd25ed8a149b_cwb_cairn-data/cairn.db
@@ -46,11 +49,19 @@
   type: tar
   path: /hoststorage/pvc-5758965b-92b8-4003-9af3-70b03bc73936_croft_croft-home
   excludes:
+    - ".local/**"          # ~96G re-creatable XDG data/state
+    - "node_modules/**"     # re-installable
+    - ".codex/**"           # codex agent state, re-creatable
+    - ".mem-backup/**"      # already mirrored to GitHub (shadow-memory)
     - "src/**"         # re-clonable repo caches — excluded by the operator principle
     - "work/**"
     - "go/**"
     - ".cache/**"
     - ".npm/**"
+    - "models/**"          # ~19G re-downloadable model weights — was OOM-evicting porter (8Gi work cap)
     - ".local/share/claude/**"   # reinstallable
+    - ".claude/projects/**/*.jsonl"   # session transcripts now filed into commonplace (INC-4c); not tarred here (was OOMing porter)
     - "shadow/porter-recovery.key"        # NEVER: decrypts these very backups
     - "shadow/google_oauth_client.json"   # re-creatable in Google console
+
+
