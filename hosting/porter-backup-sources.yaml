@@ -48,20 +48,24 @@
 - name: croft-home
   type: tar
   path: /hoststorage/pvc-5758965b-92b8-4003-9af3-70b03bc73936_croft_croft-home
+  # ALLOWLIST (not a block-list): croft home is a ~50G tree that is ~99%
+  # re-creatable (model weights, build/module caches, repo clones re-clonable
+  # from cairn/GitHub). Back up ONLY the irreplaceable, not-in-repos state
+  # (~180M measured). Anything new is ignored by DEFAULT — a new big dir can no
+  # longer silently balloon the tar past the 8Gi work volume and OOM-evict the
+  # pod (the failure that hid for weeks). max_bytes is the fail-loud backstop.
+  includes:
+    - "*.md"          # shadow's off-git design docs (~/*.md) — not in any repo
+    - ".claude"       # skills, agents, CLAUDE.md, and the memory .md (transcripts dropped below)
+    - ".config"       # tool/app config
+    - ".ctxmap"       # ctxmap working memory (project state)
+    - ".mem-backup"   # memory mirror staging (redundant w/ GitHub shadow-memory; kept belt-and-suspenders)
+    - "shadow"        # design docs / research / tools (renders + secrets dropped below)
   excludes:
-    - ".local/**"          # ~96G re-creatable XDG data/state
-    - "node_modules/**"     # re-installable
-    - ".codex/**"           # codex agent state, re-creatable
-    - ".mem-backup/**"      # already mirrored to GitHub (shadow-memory)
-    - "src/**"         # re-clonable repo caches — excluded by the operator principle
-    - "work/**"
-    - "go/**"
-    - ".cache/**"
-    - ".npm/**"
-    - "models/**"          # ~19G re-downloadable model weights — was OOM-evicting porter (8Gi work cap)
-    - ".local/share/claude/**"   # reinstallable
-    - ".claude/projects/**/*.jsonl"   # session transcripts now filed into commonplace (INC-4c); not tarred here (was OOMing porter)
+    - ".claude/projects/**/*.jsonl"       # ~1G session transcripts — re-creatable; the memory .md alongside them is kept
+    - "shadow/snap_archive"               # ~156M re-renderable game snapshot PNGs
     - "shadow/porter-recovery.key"        # NEVER: decrypts these very backups
     - "shadow/google_oauth_client.json"   # re-creatable in Google console
+  max_bytes: 2147483648   # 2 GiB fail-loud guard (~11x the expected ~180M; still well under the 8Gi work cap)
 
 
