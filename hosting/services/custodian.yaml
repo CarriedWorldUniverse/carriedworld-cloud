@@ -94,6 +94,17 @@ spec:
                 secretKeyRef:
                   name: custodian-org-seed
                   key: CUSTODIAN_ORG_SEED
+            # Cert-bound identity (NEX-774): claims derive from the verified
+            # peer-cert CN + these grants; self-asserted cwb-* metadata is only
+            # honored from the trusted proxies (which authenticate the real
+            # caller upstream) and must otherwise MATCH the cert-derived claims
+            # (mismatch → denied + audited). Rollback: set mode to "metadata".
+            - name: CUSTODIAN_IDENT_MODE
+              value: "cert"
+            - name: CUSTODIAN_TRUSTED_PROXIES
+              value: "interchange,nexus-broker"
+            - name: CUSTODIAN_GRANTS
+              value: "croft=orgs:carriedworld,07244ac5-1fbd-4786-9301-a925f4241306;scopes:cred:read,cred:write|operator=orgs:*;scopes:admin:write|porter-backup=orgs:07244ac5-1fbd-4786-9301-a925f4241306;scopes:cred:read"
           volumeMounts:
             - name: data
               mountPath: /var/lib/cwb
