@@ -1,0 +1,18 @@
+# Client identity for the operator box (little-blue) — lets the operator run
+# the cw CLI against the pillars over the tailnet edge
+# (*.core.carriedworld.dev TLS-passthrough; see core-edge.yaml). Distinct
+# subject so pillar-side identity stays per-caller (never reuse croft's).
+# Cert material is extracted to the box at setup; rotate by deleting the
+# secret (cert-manager reissues) and re-copying.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: operator-client
+  namespace: cwb
+spec:
+  secretName: operator-client-tls
+  issuerRef:
+    name: cwb-ca
+    kind: Issuer
+  commonName: operator
+  usages: ["client auth"]
