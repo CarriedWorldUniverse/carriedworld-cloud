@@ -1,0 +1,52 @@
+# Nexus dashboard at https://dashboard.nexus.carriedworld.dev
+# APPLIED 2026-07-17 (phase 2 complete). Auth migration done alongside:
+#   secret nexus/nexus-broker-env now sets BOTH
+#     NEXUS_OPERATOR_RPID=carriedworld.dev       (registrable suffix — any
+#       *.carriedworld.dev host keeps passkeys valid across future renames)
+#     NEXUS_OPERATOR_ORIGINS=https://dashboard.nexus.carriedworld.dev
+#       (REQUIRED: without it the broker derives https://<rpid>:7888 and
+#       FinishRegistration fails "Error validating origin" — origins are
+#       exact-string matched incl. port; add comma-separated entries if the
+#       dashboard ever gets more hostnames)
+#   Old ts.net passkey deleted, new passkey registered under the new rpId.
+# NOTE: the serversscheme/serverstransport hints live as annotations on the
+# nexus-broker SERVICE (hosting/services/nexus-broker.yaml) — Traefik ignores
+# service.* annotations placed on the Ingress.
+# Recovery if locked out: in-pod `nexus operator` CLI (see nexus-auth skill).
+#
+# The broker serves its own TLS on :7888 (ts.net cert), so Traefik must proxy
+# HTTPS→HTTPS; the ServersTransport below skips upstream verification (the
+# upstream cert says ts.net, not carriedworld.dev — name mismatch is expected).
+# Tighten later by pointing the broker at a cwb-ca cert and pinning that CA.
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: nexus-broker-upstream
+  namespace: nexus
+spec:
+  insecureSkipVerify: true
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dashboard
+  namespace: nexus
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    # no router.tls annotation — TLS is inherited from the websecure entrypoint
+    # (an explicit router.tls suppresses the entrypoint certResolver model)
+    traefik.ingress.kubernetes.io/service.serversscheme: https
+    traefik.ingress.kubernetes.io/service.serverstransport: nexus-nexus-broker-upstream@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: dashboard.nexus.carriedworld.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nexus-broker
+                port:
+                  number: 7888

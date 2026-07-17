@@ -1,0 +1,39 @@
+# Template: expose a service on the carriedworld.dev edge.
+# Naming rule (decided 2026-07-16): DNS zone mirrors the k8s namespace —
+#   namespace cwb   → <name>.core.carriedworld.dev
+#   namespace nexus → <name>.nexus.carriedworld.dev
+# The wildcard cert on the websecure entrypoint covers both; no per-Ingress
+# cert config needed (do NOT add a certResolver annotation here).
+#
+# Plain-HTTP backend (litellm, lynxai, go-gate, …): delete the serversscheme /
+# serverstransport annotations. mTLS backends (most cwb pillars): Traefik must
+# present a client cert — needs a ServersTransport with certificatesSecrets
+# referencing a cwb-ca-issued client cert; do this per-service, deliberately.
+# Most cwb pillars are machine APIs that may not belong on the browser edge at all.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: SERVICE_NAME
+  namespace: NAMESPACE            # cwb | nexus
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    # DO NOT add router.tls: "true" — it creates an explicit empty TLS config
+    # that SUPPRESSES the entrypoint's certResolver/domains model (observed
+    # 2026-07-17: default cert served, no ACME). Routers on websecure inherit
+    # TLS from the entrypoint automatically.
+    # -- only for HTTPS upstreams: --
+    # traefik.ingress.kubernetes.io/service.serversscheme: https
+    # traefik.ingress.kubernetes.io/service.serverstransport: NAMESPACE-TRANSPORT_NAME@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: SERVICE_NAME.ZONE.carriedworld.dev   # ZONE = core | nexus
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: SERVICE_NAME
+                port:
+                  number: SERVICE_PORT

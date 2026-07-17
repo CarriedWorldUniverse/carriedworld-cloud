@@ -172,6 +172,13 @@ kind: Service
 metadata:
   name: nexus-broker
   namespace: nexus
+  annotations:
+    # Traefik reads service-level hints from the SERVICE, not the Ingress:
+    # the broker serves its own TLS on :7888, so the edge must proxy https
+    # via the skip-verify ServersTransport (hosting/staged/traefik-edge/
+    # ingresses/dashboard.yaml).
+    traefik.ingress.kubernetes.io/service.serversscheme: https
+    traefik.ingress.kubernetes.io/service.serverstransport: nexus-nexus-broker-upstream@kubernetescrd
 spec:
   type: ClusterIP
   # Pinned so in-cluster aspects can hostAlias nexus.tail41686e.ts.net → this
