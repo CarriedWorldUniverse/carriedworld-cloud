@@ -1,0 +1,118 @@
+# Core-pillar edge routes: <name>.core.carriedworld.dev → the cwb mTLS APIs.
+#
+# These are TLS-PASSTHROUGH routes (IngressRouteTCP, HostSNI), NOT terminated
+# HTTP Ingresses: the pillars enforce end-to-end mTLS and derive caller
+# identity from the client cert (cwb-subject via mdident). Terminating at
+# Traefik and re-encrypting with a shared edge client cert would collapse
+# every caller into one identity — passthrough keeps the edge a dumb SNI
+# router and the mTLS fabric intact. Consequence: callers still need a
+# cwb-ca client cert; the LE wildcard cert does NOT apply to these SNIs
+# (clients verify the pillar's own cwb-ca server cert, whose SAN list
+# includes <name>.core.carriedworld.dev — added alongside these routes).
+#
+# cairn: not routed here (no <name>-tls server cert; ssh has its own LB).
+# herald: dormant IdP, deliberately not exposed. interchange: unused.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: core-edge-almanac
+  namespace: cwb
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: HostSNI(`almanac.core.carriedworld.dev`)
+      services:
+        - name: almanac
+          port: 8083
+  tls:
+    passthrough: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: core-edge-atlas
+  namespace: cwb
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: HostSNI(`atlas.core.carriedworld.dev`)
+      services:
+        - name: atlas
+          port: 8089
+  tls:
+    passthrough: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: core-edge-commonplace
+  namespace: cwb
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: HostSNI(`commonplace.core.carriedworld.dev`)
+      services:
+        - name: commonplace
+          port: 8101
+  tls:
+    passthrough: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: core-edge-custodian
+  namespace: cwb
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: HostSNI(`custodian.core.carriedworld.dev`)
+      services:
+        - name: custodian
+          port: 8085
+  tls:
+    passthrough: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: core-edge-ledger
+  namespace: cwb
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: HostSNI(`ledger.core.carriedworld.dev`)
+      services:
+        - name: ledger
+          port: 8081
+  tls:
+    passthrough: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: core-edge-mason
+  namespace: cwb
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: HostSNI(`mason.core.carriedworld.dev`)
+      services:
+        - name: mason
+          port: 8086
+  tls:
+    passthrough: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: core-edge-porter-backup
+  namespace: cwb
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: HostSNI(`porter-backup.core.carriedworld.dev`)
+      services:
+        - name: porter-backup
+          port: 8087
+  tls:
+    passthrough: true

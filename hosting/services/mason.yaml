@@ -69,6 +69,7 @@ spec:
   secretName: mason-tls
   commonName: mason
   dnsNames:
+    - mason.core.carriedworld.dev
     - mason
     - mason.cwb.svc.cluster.local
   usages:
@@ -103,6 +104,10 @@ spec:
       serviceAccountName: mason
       imagePullSecrets:
         - name: ghcr-pull
+      # amd64-only digest-pinned image; without this the scheduler may
+      # place the pod on robo-dog (arm64) -> exec format error crash-loop
+      nodeSelector:
+        kubernetes.io/arch: amd64
       containers:
         - name: mason
           image: ghcr.io/carriedworlduniverse/mason:sha-1cb7717@sha256:86e94eb6d8b2f04f0e75ca0f2dab6cf8211519445ad1bb97f025a100f765d89b

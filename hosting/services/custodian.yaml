@@ -27,6 +27,7 @@ metadata:
 spec:
   secretName: custodian-tls
   dnsNames:
+    - custodian.core.carriedworld.dev
     - custodian.cwb.svc
     - custodian.cwb.svc.cluster.local
     - custodian
@@ -70,6 +71,10 @@ spec:
       labels:
         app: custodian
     spec:
+      # amd64-only digest-pinned image; without this the scheduler may
+      # place the pod on robo-dog (arm64) -> exec format error crash-loop
+      nodeSelector:
+        kubernetes.io/arch: amd64
       containers:
         - name: custodian
           image: ghcr.io/carriedworlduniverse/custodian:sha-6e40797@sha256:13ec27ecb1ef5740f61cf954692570e9032f0022e7441d48e07b84b6dc605cb8

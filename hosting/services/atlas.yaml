@@ -68,6 +68,7 @@ metadata:
 spec:
   secretName: atlas-tls
   dnsNames:
+    - atlas.core.carriedworld.dev
     - atlas.cwb.svc
     - atlas.cwb.svc.cluster.local
   usages:
@@ -139,6 +140,10 @@ spec:
       hostAliases:
         - ip: "100.91.185.71"
           hostnames: ["dmonextreme.tail41686e.ts.net"]
+      # amd64-only digest-pinned image; without this the scheduler may
+      # place the pod on robo-dog (arm64) -> exec format error crash-loop
+      nodeSelector:
+        kubernetes.io/arch: amd64
       containers:
         # 1. atlas itself — collector loop + StrataService gRPC + web map.
         - name: atlas

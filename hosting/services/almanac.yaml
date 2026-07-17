@@ -24,6 +24,7 @@ metadata:
 spec:
   secretName: almanac-tls
   dnsNames:
+    - almanac.core.carriedworld.dev
     - almanac.cwb.svc
     - almanac.cwb.svc.cluster.local
     - almanac
@@ -67,6 +68,10 @@ spec:
       labels:
         app: almanac
     spec:
+      # amd64-only digest-pinned image; without this the scheduler may
+      # place the pod on robo-dog (arm64) -> exec format error crash-loop
+      nodeSelector:
+        kubernetes.io/arch: amd64
       containers:
         - name: almanac
           image: ghcr.io/carriedworlduniverse/almanac:sha-947a05e@sha256:59e4c2535e8ea0b57ed56d9686be9c2a2ed09c4c67ec070d37e5c02ec41c2cbf

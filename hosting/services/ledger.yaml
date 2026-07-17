@@ -8,6 +8,7 @@ metadata:
   namespace: cwb
 spec:
   dnsNames:
+  - ledger.core.carriedworld.dev
   - ledger.cwb.svc
   - ledger.cwb.svc.cluster.local
   - ledger
@@ -53,6 +54,10 @@ spec:
       labels:
         app: ledger
     spec:
+      # amd64-only digest-pinned image; without this the scheduler may
+      # place the pod on robo-dog (arm64) -> exec format error crash-loop
+      nodeSelector:
+        kubernetes.io/arch: amd64
       containers:
       - env:
         - name: LEDGER_GRPC_ADDR
