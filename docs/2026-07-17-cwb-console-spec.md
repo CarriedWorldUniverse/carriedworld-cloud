@@ -141,6 +141,12 @@ Criteria follow `docs/network/OBSERVABLE-CRITERIA.md` — checkable from artifac
 
 **Slice 4 (later, separate sign-off) — ops verbs via mason action slots; cedar-harbor doc-reader panel as sibling page.**
 
+**Slice 5 (later, separate sign-off) — AI copilot drawer. Contract pinned in §11 now; runtime chosen at slice time.**
+- AC12: with the drawer closed, no model session exists (process/session listing evidence); opening it spawns one, ≥N minutes idle kills it.
+- AC13: asking "why is <tile> red?" yields an answer grounded in the actual `/api/console/state` JSON (the cited values match a capture taken the same minute).
+- AC14: an AI-drafted config change appears ONLY as a diff in the §6 preview flow; almanac logs show zero writes attributable to the copilot session — the applied write's `audit_log.actor` is the operator's herald subject, and it lands via the same CAS path (sqlite excerpt).
+- AC15: the copilot's tool surface enumerates exactly: console-state read, config get/list/history. No SetConfig, no SecretService, no k8s, no shell (tool manifest + a refused-write transcript).
+
 ## 10. Open decisions for the operator
 
 1. **§7 identity path**: (b) session-derived assertion now (recommended), or wait for (a) token pass-through via interchange before any write ships?
@@ -148,7 +154,17 @@ Criteria follow `docs/network/OBSERVABLE-CRITERIA.md` — checkable from artifac
 3. **Backup granularity**: pass-level staleness v1 (recommended) vs. adding per-source last-sweep persistence to porter first?
 4. **Placement confirmation**: console as an atlas page (recommended, this spec) vs. a separate tiny service (costs a 5th always-on thing; only worth it if the atlas boundary revision in §3 is unacceptable).
 
-## 11. Lean-design self-review
+## 11. AI copilot — the slice-5 contract (pinned now, built later)
+
+Operator ask (2026-07-17): an AI in the page "for managing and changing options". Accepted, with the authority model fixed in advance:
+
+- **Propose, never apply.** The copilot drafts config changes as diffs that land in the §6 preview → Apply flow. The human click carries the write, with the operator's identity, through the same `expected_version` CAS and audit path. The copilot session holds **no write credential of any kind** — this is the gate-hardening lesson (model self-reports are not authority) applied to config.
+- **On-demand, not daemon.** No standing model session (lazy-connection principle; the 4-always-on-things budget). The drawer spawns a session on open, reaps on idle.
+- **Tool surface is a closed set** (P2): console-state read, `GetConfig`/`ListConfig`/`ListConfigHistory`. No SetConfig, no secrets, no k8s, no shell. Grounding rule: answers about cloud state must cite the state JSON it actually read.
+- **Runtime — deferred decision, two candidates:** (A) a config-scoped aspect on the existing nexus-control broker (SkillAllowlist per role; least new code; the drawer is a thin WS client) vs (B) thin over the Agent SDK on-demand on dMon per the parked 2026-07-07 ADE research ("walk-through-with-shadow"; cleaner isolation; Ornith-backed, Claude-via-bridle escalation). Chosen when slice 5 is picked up — the seams are identical either way, which is why the contract can be pinned before the runtime.
+- **Sequencing:** the copilot's tools ARE the console's seams; slice 5 cannot start before slices 1–3 are live and proven.
+
+## 12. Lean-design self-review
 
 - **P1 ✓** — the console hides "how state is gathered / how config intent reaches almanac"; pillar code and `cw` remain untouched by page changes. The seam that's *likely to change* (tile set, layout) is isolated in static assets.
 - **P2 ✓** — SecretService client never constructed; scope cap is a code constant; `StrataService` untouched — wrong shortcuts unrepresentable, not just discouraged.
