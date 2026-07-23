@@ -136,7 +136,14 @@ metadata:
   name: porter-backup
   namespace: cwb
 spec:
-  replicas: 1
+  # RETIRED 2026-07-23 (operator): this standalone deployment is superseded by
+  # the porter-backup CONTAINER inside cwb-core (the consolidated pillar pod),
+  # which runs the eviction-fixed image (sha-cb72778+, source-allowlist fix of
+  # 2026-07-17). This copy stayed on the PRE-fix image and evicted on its 8Gi
+  # work volume every ~8 minutes for a week (~1050 Failed pod records).
+  # replicas MUST stay 0 so a re-apply cannot resurrect it — do not raise
+  # without rolling the image forward AND deciding it should exist at all.
+  replicas: 0
   strategy: { type: Recreate }
   selector:
     matchLabels: { app: porter-backup }
