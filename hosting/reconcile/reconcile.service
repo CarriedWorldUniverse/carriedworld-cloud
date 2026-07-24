@@ -14,4 +14,10 @@ Environment=RECONCILE_WEBHOOK_FILE=/etc/carriedworld/discord_webhook
 # exclusion is version-controlled and reviewable. Override with a host-local
 # path only for a genuine one-host exception.
 Environment=RECONCILE_SKIP_FILE=/opt/carriedworld-cloud/hosting/reconcile/skip-list
-User=carriedworld-reconcile
+# Runs as root. Two hard reasons, not laziness: (1) the k3s kubeconfig at
+# /etc/rancher/k3s/k3s.yaml is root-only, and (2) reconcile applies cluster-wide
+# manifests INCLUDING RBAC, so any dedicated user would need permissions
+# equivalent to cluster-admin anyway — the isolation would be theatre. The real
+# containment is that reconcile only ever applies what is committed to the repo,
+# and alerts before it acts.
+User=root
