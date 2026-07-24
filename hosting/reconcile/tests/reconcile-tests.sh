@@ -164,5 +164,19 @@ grep -q "WARNING: webhook file not readable" "$work_dir/missing-webhook.err" || 
 called "$log_file" "kubectl apply --server-side" || fail "missing-webhook: reconcile must still apply (documented choice, see README)"
 echo "PASS: missing-webhook (warns, still applies)"
 
+# --- (v) diff-only mode ---------------------------------------------------------
+# The safe first-cycle / "what would change?" mode: drift is found and ALERTED,
+# but the cluster is never written to.
+
+run_case "diff-only" 0 \
+  KUBECTL_DIFF_RC=1 \
+  RECONCILE_DIFF_ONLY=1 \
+  RECONCILE_WEBHOOK_FILE="$webhook_file"
+
+called "$log_file" "curl " || fail "diff-only: the alert must still be sent"
+not_called "$log_file" "kubectl apply" || fail "diff-only: apply must NEVER be called in diff-only mode"
+grep -q "DIFF-ONLY" "$work_dir/diff-only.out" || fail "diff-only: run must announce diff-only mode"
+echo "PASS: diff-only (alerted, apply never called)"
+
 echo
 echo "all reconcile scenarios passed"
