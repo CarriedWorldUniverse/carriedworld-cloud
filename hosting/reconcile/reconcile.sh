@@ -23,6 +23,10 @@
 #                           one basename per line (# comments, blank lines
 #                           ignored). Default: none configured (nothing
 #                           skipped). See hosting/reconcile/README.md.
+#   RECONCILE_DIFF_ONLY     if set to a non-empty value, report drift and send
+#                           the alert but NEVER apply -- the safe way to run a
+#                           first cycle (or to answer "what would change?")
+#                           without writing to the cluster
 #   RECONCILE_NO_PULL       if set to a non-empty value, skip the git pull
 #                           step (used by the test harness; real deployments
 #                           should leave this unset).
@@ -181,7 +185,12 @@ done
 # ---------------------------------------------------------------------------
 
 if [ "$drift_found" -eq 1 ]; then
-  summary="carriedworld-cloud reconcile: drift detected, applying now.
+  if [ -n "${RECONCILE_DIFF_ONLY:-}" ]; then
+    verb="DIFF-ONLY: drift detected, NOT applying (RECONCILE_DIFF_ONLY set)."
+  else
+    verb="drift detected, applying now."
+  fi
+  summary="carriedworld-cloud reconcile: ${verb}
 
 $(printf '%s' "$diff_summary" | head -c 3500)"
   if ! alert "$summary"; then
@@ -195,6 +204,11 @@ fi
 # ---------------------------------------------------------------------------
 # 5. apply
 # ---------------------------------------------------------------------------
+
+if [ -n "${RECONCILE_DIFF_ONLY:-}" ]; then
+  echo "== DIFF-ONLY mode: drift reported and alerted, apply skipped =="
+  exit 0
+fi
 
 echo "== kubectl apply --server-side =="
 for target in "${apply_list[@]}"; do

@@ -74,6 +74,20 @@ Both invoke the same `reconcile.sh`.
 basenames to exclude from diff+apply entirely (see `skip-list.example`).
 Empty/unset by default — nothing is skipped.
 
+## Diff-only mode (run this first)
+
+Set `RECONCILE_DIFF_ONLY=1` and reconcile does everything except write: it
+pulls, diffs, and sends the Discord alert (prefixed `DIFF-ONLY:`), then exits
+without applying. This is the safe way to run a first cycle on a cluster whose
+repo has not been the source of truth for a while — you get to read exactly
+what WOULD change, and prove the alert path works, before anything is applied.
+It is also the honest way to answer "what has drifted?" at any time.
+
+    RECONCILE_DIFF_ONLY=1 RECONCILE_WEBHOOK_FILE=/etc/carriedworld/discord_webhook \
+      bash hosting/reconcile/reconcile.sh
+
+Drop the variable (or set it empty) to arm the apply.
+
 ## Break-glass
 
 Reconcile is **repo -> live only**. Any hand edit made directly against the
