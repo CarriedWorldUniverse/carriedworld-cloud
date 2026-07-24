@@ -72,6 +72,14 @@ alert() {
   fi
   local url payload
   url="$(<"$WEBHOOK_FILE")"
+  # Discord rejects content longer than 2000 chars with HTTP 400 (verified
+  # live 2026-07-24: 204 at short length, 400 at 2500). Truncate HERE, in the
+  # one place that talks to Discord, so no caller can accidentally exceed it.
+  # Escaping happens after truncation so a cut can never split an escape.
+  if [ "${#msg}" -gt 1900 ]; then
+    msg="${msg:0:1900}
+[truncated -- full diff is in the reconcile log]"
+  fi
   payload="{\"content\":\"$(json_escape "$msg")\"}"
   if ! "$CURL" -fsS -X POST -H 'Content-Type: application/json' -d "$payload" "$url" >/dev/null; then
     echo "reconcile: WARNING: failed to POST Discord alert" >&2
@@ -190,9 +198,13 @@ if [ "$drift_found" -eq 1 ]; then
   else
     verb="drift detected, applying now."
   fi
+  # Lead with the LABELS (what drifted) — that is the operator-actionable part
+  # and always fits; the raw diff body follows only as far as the limit allows.
+  drift_labels="$(printf '%s' "$diff_summary" | grep -E '^[^ ]+:$' | tr -d ':' | paste -sd', ' -)"
   summary="carriedworld-cloud reconcile: ${verb}
+drifted: ${drift_labels}
 
-$(printf '%s' "$diff_summary" | head -c 3500)"
+$(printf '%s' "$diff_summary" | head -c 1200)"
   if ! alert "$summary"; then
     fail "drift detected but the Discord alert failed to send -- refusing to apply blind"
   fi
