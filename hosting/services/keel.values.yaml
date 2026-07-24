@@ -24,3 +24,9 @@ identity:
   key: keyfile.json
   mountPath: /etc/nexus
 tailnetEdge: false
+
+# replicas:0 — same class as anvil/plumb/harrow: an agentfunnel builder whose
+# replica count the BROKER owns (wake controller scales 0->1 on demand). Without
+# this key the chart default (1) applies and reconcile would start a pool worker
+# the operator deliberately stopped. Matches live (no running keel) — NEX-819.
+replicas: 0
