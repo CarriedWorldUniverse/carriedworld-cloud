@@ -11,5 +11,7 @@ to render them into cluster resources.
 - `apply.sh` is the idempotent reconcile entrypoint. It renders services and
   applies cluster config and RBAC.
 - `../bootstrap/hosting-reconcile-cronjob.yaml` runs the periodic reconcile.
+- `reconcile/` is the diff-first, alert-before-apply drift safety net
+  (NEX-816) — see `reconcile/README.md`.
 - `../clusters/dmon/coredns-custom.yaml` is the CoreDNS naming keystone for the
   platform.

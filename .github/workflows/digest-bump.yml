@@ -1,0 +1,64 @@
+# NEX-816: when an image referenced by hosting/reconcile/images.txt is
+# published, bump its digest-pinned reference in the manifest that declares
+# it and open a PR -- never push straight to main (reconcile.sh + apply.sh
+# are what actually roll it out, on merge).
+#
+# There is no image-build workflow in this repo to extend: images are built
+# out-of-band (see bootstrap/build-all-images.sh, and each pillar's own
+# repo/CI for the ghcr.io/carriedworlduniverse/* images). This workflow is
+# the receiving end, triggered either by hand or by a cross-repo dispatch
+# from whatever publishes the image.
+name: digest-bump
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "image name, must match a row in hosting/reconcile/images.txt (e.g. porter-backup)"
+        required: true
+      ref:
+        description: "new reference after the image name, e.g. sha-1a2b3c4@sha256:<64-hex-digest>"
+        required: true
+  repository_dispatch:
+    types: [image-published]
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: resolve inputs
+        id: vars
+        env:
+          DISPATCH_IMAGE: ${{ github.event.client_payload.image }}
+          DISPATCH_REF: ${{ github.event.client_payload.ref }}
+        run: |
+          set -euo pipefail
+          image="${{ github.event.inputs.image }}"
+          ref="${{ github.event.inputs.ref }}"
+          if [ -z "$image" ]; then image="$DISPATCH_IMAGE"; fi
+          if [ -z "$ref" ]; then ref="$DISPATCH_REF"; fi
+          if [ -z "$image" ] || [ -z "$ref" ]; then
+            echo "missing image/ref (workflow_dispatch inputs or repository_dispatch client_payload)" >&2
+            exit 1
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: bump digest
+        run: bash hosting/reconcile/bump-digest.sh "${{ steps.vars.outputs.image }}" "${{ steps.vars.outputs.ref }}"
+
+      - name: open PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(hosting): bump ${{ steps.vars.outputs.image }} digest"
+          branch: digest-bump/${{ steps.vars.outputs.image }}
+          title: "chore(hosting): bump ${{ steps.vars.outputs.image }} digest"
+          body: |
+            Automated digest bump for `${{ steps.vars.outputs.image }}` -> `${{ steps.vars.outputs.ref }}`.
+
+            Opened by `.github/workflows/digest-bump.yml` (NEX-816). Reconcile
+            (`hosting/reconcile/reconcile.sh`) or the CI apply workflow
+            (`.github/workflows/apply.yml`) will roll this out once merged --
+            this workflow never pushes to main directly.
+          delete-branch: true

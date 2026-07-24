@@ -1,0 +1,22 @@
+# Registry: which images the digest-bump workflow (.github/workflows/digest-bump.yml)
+# knows how to update, and where. One line per image: "<image-name> <file>".
+# Adding a new image is one line here.
+#
+# NOTE (NEX-816): the ticket for this workflow named its first two targets as
+# "porter-backup + cwb-core". porter-backup is a real, digest-pinned image in
+# this repo (hosting/services/porter-backup.yaml). There is no image actually
+# named "cwb-core" here -- the CWB platform pillars are separate,
+# individually-built images (cairn, ledger, commonplace, custodian, almanac),
+# each already digest-pinned in hosting/services/*.yaml. Seeding this list
+# with all of them so the mechanism is exercised end-to-end; Fable should
+# confirm scope (only porter-backup + one pillar? all of them?) before this
+# goes live.
+porter-backup hosting/services/porter-backup.yaml
+cairn hosting/services/cairn.yaml
+ledger hosting/services/ledger.yaml
+commonplace hosting/services/commonplace.yaml
+custodian hosting/services/custodian.yaml
+almanac hosting/services/almanac.yaml
+atlas hosting/services/atlas.yaml
+mason hosting/services/mason.yaml
+lynxai hosting/services/lynxai.values.yaml
