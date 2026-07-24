@@ -14,3 +14,10 @@ storage:
 identity:
   mode: none
 tailnetEdge: false
+
+# replicas:0 — the standalone sqld is RETIRED: the database now runs as the
+# `sqld` container inside nexus-control (see its app.nexus/sqld label), the same
+# consolidation cwb-core did for the pillars. Live has been 0 for 48d; without
+# this key the chart default (1) applies and reconcile would stand a second,
+# empty sqld up beside the real one. Matches live — NEX-819.
+replicas: 0

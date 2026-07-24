@@ -16,3 +16,9 @@ storage:
 identity:
   mode: none
 tailnetEdge: false
+
+# replicas:0 — deliberately dropped in the personal-cloud YAGNI rebuild
+# (2026-06-27 load-drop, alongside litellm's own scale-down). Live has been 0 for
+# 42d; without this key the chart default (1) applies and reconcile would
+# resurrect it. Matches live — NEX-819.
+replicas: 0
