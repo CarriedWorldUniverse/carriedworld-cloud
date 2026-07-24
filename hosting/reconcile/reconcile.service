@@ -10,6 +10,8 @@ Type=oneshot
 WorkingDirectory=/opt/carriedworld-cloud
 ExecStart=/opt/carriedworld-cloud/hosting/reconcile/reconcile.sh
 Environment=RECONCILE_WEBHOOK_FILE=/etc/carriedworld/discord_webhook
-# Uncomment to exclude specific manifest sources (see skip-list.example):
-# Environment=RECONCILE_SKIP_FILE=/etc/carriedworld/reconcile-skip-list
+# The ACTIVE skip-list lives in the repo (hosting/reconcile/skip-list) so every
+# exclusion is version-controlled and reviewable. Override with a host-local
+# path only for a genuine one-host exception.
+Environment=RECONCILE_SKIP_FILE=/opt/carriedworld-cloud/hosting/reconcile/skip-list
 User=carriedworld-reconcile

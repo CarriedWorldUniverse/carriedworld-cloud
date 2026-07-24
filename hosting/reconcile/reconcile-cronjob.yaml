@@ -61,6 +61,9 @@ spec:
                   valueFrom: { secretKeyRef: { name: hosting-git-token, key: token } }
                 - name: RECONCILE_WEBHOOK_FILE
                   value: /etc/carriedworld/discord_webhook
+                # In-repo skip-list: exclusions stay version-controlled.
+                - name: RECONCILE_SKIP_FILE
+                  value: /repo/hosting/reconcile/skip-list
               volumeMounts:
                 - { name: discord-webhook, mountPath: /etc/carriedworld, readOnly: true }
               command: ["/bin/sh","-c"]
