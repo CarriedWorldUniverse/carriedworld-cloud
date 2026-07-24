@@ -68,6 +68,9 @@ metadata:
 spec:
   secretName: atlas-tls
   dnsNames:
+    # public SAN — live carries it; dropping it breaks TLS for anything
+    # reaching this pillar by its core.carriedworld.dev name (NEX-819).
+    - atlas.core.carriedworld.dev
     - atlas.cwb.svc
     - atlas.cwb.svc.cluster.local
   usages:

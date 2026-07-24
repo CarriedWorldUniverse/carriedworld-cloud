@@ -8,6 +8,9 @@ metadata:
   namespace: cwb
 spec:
   dnsNames:
+  # public SAN — live carries it; dropping it breaks TLS for anything
+  # reaching this pillar by its core.carriedworld.dev name (NEX-819).
+  - ledger.core.carriedworld.dev
   - ledger.cwb.svc
   - ledger.cwb.svc.cluster.local
   - ledger

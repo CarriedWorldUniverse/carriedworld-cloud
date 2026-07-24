@@ -69,6 +69,9 @@ spec:
   secretName: mason-tls
   commonName: mason
   dnsNames:
+    # public SAN — live carries it; dropping it breaks TLS for anything
+    # reaching this pillar by its core.carriedworld.dev name (NEX-819).
+    - mason.core.carriedworld.dev
     - mason
     - mason.cwb.svc.cluster.local
   usages:

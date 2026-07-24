@@ -170,8 +170,9 @@ spec:
   - name: ssh
     port: 2222
     protocol: TCP
-    targetPort: ssh
+    targetPort: 2222
   selector:
-    app: cairn
+    # cairn-rd is the live backing deployment for ssh (NEX-819, matches live)
+    app: cairn-rd
   type: LoadBalancer
 

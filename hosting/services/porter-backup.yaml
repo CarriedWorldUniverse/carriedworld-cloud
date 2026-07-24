@@ -119,6 +119,9 @@ metadata:
 spec:
   secretName: porter-backup-tls
   dnsNames:
+    # public SAN — live carries it; dropping it breaks TLS for anything
+    # reaching this pillar by its core.carriedworld.dev name (NEX-819).
+    - porter-backup.core.carriedworld.dev
     - porter-backup.cwb.svc
     - porter-backup.cwb.svc.cluster.local
   usages:

@@ -24,6 +24,9 @@ metadata:
 spec:
   secretName: almanac-tls
   dnsNames:
+    # public SAN — live carries it; dropping it breaks TLS for anything
+    # reaching this pillar by its core.carriedworld.dev name (NEX-819).
+    - almanac.core.carriedworld.dev
     - almanac.cwb.svc
     - almanac.cwb.svc.cluster.local
     - almanac

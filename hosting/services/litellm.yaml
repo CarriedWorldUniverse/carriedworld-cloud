@@ -10,11 +10,11 @@ metadata:
   name: litellm-config
   namespace: model-stack
 data:
+  # config.yaml below was SYNCED FROM LIVE 2026-07-24 (NEX-819): the repo copy
+  # had drifted to 4 stale routes while live carries 16 — applying the old block
+  # would have deleted every kimi/glm/deepseek/vision/embedding route agora
+  # depends on. Secrets remain os.environ/* references; no literal keys here.
   config.yaml: |
-    # SYNCED FROM LIVE 2026-07-24 (NEX-819): the repo copy had drifted to 4
-    # stale routes while live carries 16 — applying the old block would have
-    # deleted every kimi/glm/deepseek/vision/embedding route agora depends on.
-    # Secrets stay as os.environ/* references; no literal keys in this repo.
     model_list:
       - model_name: code
         litellm_params: {model: openai/ornith, api_base: "http://100.92.111.3:30801/v1", api_key: dummy}

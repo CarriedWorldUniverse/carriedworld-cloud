@@ -219,11 +219,11 @@ metadata:
   name: croft-startup
   namespace: croft
 data:
+  # startup.sh below was SYNCED FROM LIVE 2026-07-24 (NEX-819): live carries the
+  # tier-2 kasmVNC desktop head (croft #481/#482) the repo copy never got;
+  # applying the old block would have deleted the operator's web desktop.
+  # NOTE: this script is reinstalled from THIS ConfigMap on every croft boot.
   startup.sh: |
-    # SYNCED FROM LIVE 2026-07-24 (NEX-819): live carries the tier-2 kasmVNC
-    # desktop head (croft #481/#482) that the repo copy never got. Applying the
-    # old block would have deleted the operator's web desktop. NOTE: this script
-    # is reinstalled from THIS ConfigMap on every croft boot — patch it here.
     #!/bin/bash
     # croft boot — provision sshd + the operator user + operator-token file, then
     # hold the pod open. Idempotent: safe to re-run every pod start. HOME=/home/operator
