@@ -1,0 +1,351 @@
+# Console intent registry (NEX-813).
+#
+# This is the source of truth the operator console (atlas) reads to know
+# "what can jacinta ask about / do" and where each of those things actually
+# lives in the cluster. It lives in THIS repo (carriedworld-cloud), which is
+# manifests-only (no Go code, no go.mod anywhere in the tree — checked before
+# writing this file), because the registry is cluster-topology data, same
+# category as hosting/services/*.yaml. The LOADER that parses and validates
+# this file is Go code and belongs in the nexus repo, where atlas (the
+# console host app) itself lives — there is no Go module home for it here,
+# and creating a stray one in a manifests repo would fight the repo's own
+# convention (see hosting/README.md: this directory holds "hosted-service
+# declarations", not application code).
+#
+# Schema (version 1):
+#   version: 1
+#   intents:
+#     - id: kebab-case-id                 (required)
+#       title: Human title                (required)
+#       purpose: one line, operator's vocabulary — what it does FOR her, not
+#                how it's implemented     (required)
+#       docs: [repo paths or URLs]        (optional, may be empty)
+#       substrate:                        (required)
+#         namespace: <k8s namespace>      (required — the DEFAULT namespace;
+#                                           an individual object below MAY
+#                                           override it with its own
+#                                           `namespace:` field, for the rare
+#                                           intent that spans namespaces)
+#         selector: {matchLabels: {...}}  \_ exactly one of these two
+#         objects: [{kind, name,          /  (selector for "one workload,
+#                    container?,             one label"; objects for
+#                    namespace?, note?}]      container-level binds inside a
+#                                             shared pod, multi-object
+#                                             intents, or cross-namespace
+#                                             pieces — each object may carry
+#                                             its own optional `note`)
+#       config_refs: [almanac param names] (optional)
+#       scaled_to_zero: bool                (optional, default false)
+#       note: free text                     (optional)
+#
+# Ground truth below was gathered live from the cluster by the orchestrator
+# and handed to this builder verbatim — no labels/objects here were invented.
+# Where this repo has no committed manifest for a workload (cwb-core itself,
+# herald, the embed/gateway containers), that's noted in `docs`/`note` rather
+# than papered over with a path that doesn't exist.
+
+version: 1
+intents:
+  - id: backups
+    title: Backups
+    purpose: >-
+      Encrypted offsite copies of the platform's crown-jewel secrets and
+      cluster keys, synced to Drive on a schedule.
+    docs:
+      - hosting/services/porter-backup.yaml
+      - hosting/porter-backup-sources.yaml
+    substrate:
+      namespace: cwb
+      objects:
+        - kind: Deployment
+          name: cwb-core
+          container: porter-backup
+          note: the live backup runner (eviction-fixed image sha-cb72778+)
+        - kind: Deployment
+          name: porter-backup
+          note: >-
+            retired zombie 2026-07-23, pre-fix image sha-8fcf7e2 evicted
+            every ~8min since Jul-17 — do not resurrect without rolling the
+            image forward
+    config_refs:
+      - cwb/porter/backup/sources
+    scaled_to_zero: false
+
+  - id: model-stack
+    title: Model stack
+    purpose: >-
+      The in-house language and vision models the platform runs instead of
+      calling out to a hosted API.
+    docs:
+      - hosting/services/litellm.yaml
+      - hosting/services/ollama.yaml
+    substrate:
+      namespace: model-stack
+      objects:
+        - { kind: Deployment, name: litellm }
+        - { kind: Deployment, name: ollama }
+        - { kind: Deployment, name: vllm-gemma4-vision-dmon }
+        - { kind: Deployment, name: vllm-ornith }
+        - { kind: Deployment, name: vllm-embeddinggemma, note: scaled to 0 }
+        - kind: Deployment
+          name: vllm-gemma4-vision
+          note: scaled to 0, superseded by vllm-gemma4-vision-dmon
+        - { kind: Deployment, name: vllm-qwen36, note: scaled to 0 }
+    scaled_to_zero: false
+
+  - id: broker
+    title: Broker
+    purpose: >-
+      The one live orchestration broker — routes chat/tool traffic and
+      dispatches work to the pool.
+    docs:
+      - hosting/services/nexus-broker.yaml
+    substrate:
+      namespace: nexus
+      objects:
+        - { kind: Deployment, name: nexus-control }
+        - { kind: CronJob, name: drain-seeder, note: "purpose inferred from name only — verify before relying on this note" }
+        - { kind: Deployment, name: gemma-ollama, note: scaled to 0 }
+        - { kind: Deployment, name: gemma-vllm, note: scaled to 0 }
+        - { kind: Deployment, name: lynxai, note: scaled to 0 }
+        - { kind: Deployment, name: vessel-voxcpm, note: scaled to 0 }
+    scaled_to_zero: false
+
+  - id: workspace
+    title: Workspace (croft)
+    purpose: >-
+      shadow's always-on interactive pod — the browser head and desktop
+      jacinta drives it through.
+    docs:
+      - reference_croft_browser_head
+    substrate:
+      namespace: croft
+      selector:
+        matchLabels: { app: croft }
+    scaled_to_zero: false
+
+  - id: remote-access
+    title: Remote access
+    purpose: Tailnet identity that lets the operator reach the cluster from anywhere.
+    docs: []
+    substrate:
+      namespace: tailscale
+      selector:
+        matchLabels: { app: operator }
+    scaled_to_zero: false
+
+  - id: alerting
+    title: Alerting
+    purpose: Watches the cluster and pings jacinta on Discord when something breaks.
+    docs:
+      - hosting/logging/alertmanager.yaml
+      - reference_cluster_alerting_discord
+    substrate:
+      namespace: logging
+      objects:
+        - { kind: Deployment, name: alertmanager }
+        - { kind: Deployment, name: kwatch }
+        - { kind: Deployment, name: loki-alert-bridge, namespace: nexus }
+    scaled_to_zero: false
+
+  - id: logging
+    title: Logging
+    purpose: Collects and stores logs from every pod so past behaviour can be searched.
+    docs:
+      - hosting/logging/loki-values.yaml
+      - hosting/logging/alloy-values.yaml
+    substrate:
+      namespace: logging
+      objects:
+        - { kind: StatefulSet, name: loki }
+        - kind: DaemonSet
+          name: alloy
+          note: "0 ready — drift, no repo source for this manifest"
+    scaled_to_zero: false
+
+  - id: git-mirroring
+    title: Git mirroring
+    purpose: Keeps cairn's GitHub mirror and its replica in sync automatically.
+    docs: []
+    substrate:
+      namespace: cwb
+      objects:
+        - { kind: CronJob, name: cairn-github-mirror }
+        - { kind: CronJob, name: cairn-replica-mirror }
+    scaled_to_zero: false
+
+  - id: transcript-ingest
+    title: Transcript ingest
+    purpose: Feeds jacinta's session transcripts into the platform's memory sweep.
+    docs:
+      - reference_transcript_ingest_fix
+    substrate:
+      namespace: croft
+      objects:
+        - { kind: CronJob, name: transcript-ingest }
+    scaled_to_zero: false
+
+  - id: config-store
+    title: Config store (almanac)
+    purpose: Holds the cluster-wide config values other services read at runtime.
+    docs:
+      - hosting/services/almanac.yaml
+    substrate:
+      namespace: cwb
+      objects:
+        - kind: Deployment
+          name: cwb-core
+          container: almanac
+    scaled_to_zero: false
+
+  - id: version-control
+    title: Version control (cairn)
+    purpose: >-
+      Sovereign git — jacinta's version-control replacement, backing the
+      cairn CLI and the game repo.
+    docs:
+      - hosting/services/cairn.yaml
+    substrate:
+      namespace: cwb
+      objects:
+        - kind: Deployment
+          name: cwb-core
+          container: cairn
+        - kind: Deployment
+          name: cairn-rd
+          note: standalone read-replica, active alongside the cwb-core container
+        - kind: Deployment
+          name: cairn
+          note: pre-consolidation standalone, scaled to 0 (superseded by cwb-core / cairn-rd)
+
+  - id: knowledge-store
+    title: Knowledge store (commonplace)
+    purpose: >-
+      Dialogue and coding-context memory — remembers past sessions and
+      curates what an agent gets shown.
+    docs:
+      - hosting/services/commonplace.yaml
+    substrate:
+      namespace: cwb
+      objects:
+        - kind: Deployment
+          name: cwb-core
+          container: commonplace
+    scaled_to_zero: false
+
+  - id: credential-vault
+    title: Credential vault (custodian)
+    purpose: Issues and rotates the org's external credentials (OAuth, API keys).
+    docs:
+      - hosting/services/custodian.yaml
+    substrate:
+      namespace: cwb
+      objects:
+        - kind: Deployment
+          name: cwb-core
+          container: custodian
+    scaled_to_zero: false
+
+  - id: embedding-index
+    title: Embedding index
+    purpose: >-
+      Semantic search index over the platform's stored knowledge (best-effort
+      description — no design doc found for this container; verify before
+      relying on it).
+    docs: []
+    substrate:
+      namespace: cwb
+      objects:
+        - kind: Deployment
+          name: cwb-core
+          container: embed
+    scaled_to_zero: false
+
+  - id: auth-gate
+    title: Auth gate (herald)
+    purpose: Signs jacinta in with OIDC to atlas and other operator-facing consoles.
+    docs:
+      - docs/2026-06-12-herald-authcode-plan.md
+      - docs/2026-06-14-herald-idjag-agent-auth-design.md
+    substrate:
+      namespace: cwb
+      objects:
+        - kind: Deployment
+          name: cwb-core
+          container: herald
+        - kind: Deployment
+          name: herald-rd
+          note: standalone read-replica, active alongside the cwb-core container
+        - kind: Deployment
+          name: herald
+          note: pre-consolidation standalone, scaled to 0 (superseded by cwb-core / herald-rd)
+
+  - id: audit-ledger
+    title: Audit ledger
+    purpose: Append-only tracker of platform work/issues.
+    docs:
+      - hosting/services/ledger.yaml
+    substrate:
+      namespace: cwb
+      objects:
+        - kind: Deployment
+          name: cwb-core
+          container: ledger
+        - kind: Deployment
+          name: ledger-rd
+          note: standalone read-replica, active alongside the cwb-core container
+    scaled_to_zero: false
+
+  - id: deploy-tracker
+    title: Deploy tracker (mason)
+    purpose: Tracks each hosted app's deploy phase for the Strata map to show.
+    docs:
+      - hosting/services/mason.yaml
+    substrate:
+      namespace: cwb
+      objects:
+        - kind: Deployment
+          name: cwb-core
+          container: mason
+    scaled_to_zero: false
+
+  - id: shared-database
+    title: Shared database (sqld)
+    purpose: >-
+      A shared libsql/sqld database backend some pillars can point at
+      instead of their own local sqlite file (currently unused).
+    docs:
+      - hosting/services/sqld.values.yaml
+    substrate:
+      namespace: cwb
+      selector:
+        matchLabels: { app: sqld }
+    scaled_to_zero: true
+
+  - id: cluster-map
+    title: Cluster map (atlas)
+    purpose: The live map of the platform's own state — the console itself.
+    docs:
+      - hosting/services/atlas.yaml
+      - docs/2026-06-12-atlas-plan.md
+      - docs/2026-06-12-atlas-strata-viz-design.md
+    substrate:
+      namespace: cwb
+      selector:
+        matchLabels: { app: atlas }
+    scaled_to_zero: false
+
+  - id: edge-gateway
+    title: Edge gateway
+    purpose: Routes edge/browser traffic in to the right pillar over mTLS.
+    docs: []
+    substrate:
+      namespace: cwb
+      objects:
+        - kind: Deployment
+          name: cwb-core
+          container: gateway
+        - kind: Deployment
+          name: interchange-gateway
+          note: pre-consolidation standalone, scaled to 0
+    scaled_to_zero: false
