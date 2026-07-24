@@ -220,6 +220,10 @@ metadata:
   namespace: croft
 data:
   startup.sh: |
+    # SYNCED FROM LIVE 2026-07-24 (NEX-819): live carries the tier-2 kasmVNC
+    # desktop head (croft #481/#482) that the repo copy never got. Applying the
+    # old block would have deleted the operator's web desktop. NOTE: this script
+    # is reinstalled from THIS ConfigMap on every croft boot — patch it here.
     #!/bin/bash
     # croft boot — provision sshd + the operator user + operator-token file, then
     # hold the pod open. Idempotent: safe to re-run every pod start. HOME=/home/operator
@@ -342,6 +346,15 @@ data:
     #     PVC + are tracked in home.git; preStop does a final commit) ---
     [ -x /home/operator/.local/bin/home-sync-loop.sh ] && ! pgrep -f home-sync-loop >/dev/null 2>&1 && su operator -s /bin/sh -c 'export HOME=/home/operator; setsid sh /home/operator/.local/bin/home-sync-loop.sh >/dev/null 2>&1 &' 2>/dev/null || true
     log "git auth via gh/GH_TOKEN; home.git sync loop ensured"
+
+    # --- tier-2 head: kasmVNC web desktop (packages from the image; all state on
+    #     the PVC). Inert until the image ships kasmvncserver AND ~/.vnc is
+    #     provisioned. Guarded: never fails the boot.
+    if command -v kasmvncserver >/dev/null 2>&1 && [ -x /home/operator/.vnc/xstartup ]; then
+      getent group ssl-cert >/dev/null 2>&1 && usermod -aG ssl-cert operator 2>/dev/null || true
+      su operator -s /bin/bash -c 'export HOME=/home/operator; kasmvncserver :10 -websocketPort 8444 -interface 0.0.0.0 -xstartup /home/operator/.vnc/xstartup' >/dev/null 2>&1 \
+        && log "kasmVNC desktop up (:10, wss 8444)" || log "kasmVNC start failed (non-fatal)"
+    fi
 
     # --- hold the pod open ---
     log "croft up — operator@croft.tail41686e.ts.net (ssh) ready; holding"

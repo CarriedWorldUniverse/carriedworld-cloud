@@ -103,6 +103,12 @@ spec:
       serviceAccountName: mason
       imagePullSecrets:
         - name: ghcr-pull
+      # amd64 pin: robo-dog is arm64 and these images are amd64-only, so without
+      # this the pod can schedule onto robo-dog and fail. Matches live
+      # (verified 2026-07-24, NEX-819).
+      nodeSelector:
+        kubernetes.io/arch: amd64
+
       containers:
         - name: mason
           image: ghcr.io/carriedworlduniverse/mason:sha-1cb7717@sha256:86e94eb6d8b2f04f0e75ca0f2dab6cf8211519445ad1bb97f025a100f765d89b

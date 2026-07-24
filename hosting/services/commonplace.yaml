@@ -53,6 +53,12 @@ spec:
       labels:
         app: commonplace
     spec:
+      # amd64 pin: robo-dog is arm64 and these images are amd64-only, so without
+      # this the pod can schedule onto robo-dog and fail. Matches live
+      # (verified 2026-07-24, NEX-819).
+      nodeSelector:
+        kubernetes.io/arch: amd64
+
       containers:
       - env:
         - name: COMMONPLACE_GRPC_ADDR
