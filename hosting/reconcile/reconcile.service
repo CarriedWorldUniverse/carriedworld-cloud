@@ -1,0 +1,15 @@
+[Unit]
+Description=carriedworld-cloud reconcile (diff-first, alert-before-apply)
+Documentation=https://github.com/CarriedWorldUniverse/carriedworld-cloud/blob/main/hosting/reconcile/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Point at a real checkout of this repo, e.g. /opt/carriedworld-cloud.
+WorkingDirectory=/opt/carriedworld-cloud
+ExecStart=/opt/carriedworld-cloud/hosting/reconcile/reconcile.sh
+Environment=RECONCILE_WEBHOOK_FILE=/etc/carriedworld/discord_webhook
+# Uncomment to exclude specific manifest sources (see skip-list.example):
+# Environment=RECONCILE_SKIP_FILE=/etc/carriedworld/reconcile-skip-list
+User=carriedworld-reconcile

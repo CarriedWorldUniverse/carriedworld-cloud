@@ -1,0 +1,11 @@
+# Optional skip-list for hosting/reconcile/reconcile.sh (RECONCILE_SKIP_FILE).
+# One entry per line: the basename of the manifest source to exclude from
+# diff+apply -- either a raw hosting/services/*.yaml file, a
+# hosting/services/*.values.yaml file (the chart-rendered ones), or the
+# literal "clusters/dmon" for the cluster-config phase. # comments and blank
+# lines are ignored. Empty by default -- nothing is skipped unless this file
+# is populated and pointed to.
+#
+# Example:
+# lynxai.values.yaml
+# mason.yaml
