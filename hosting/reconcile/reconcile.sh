@@ -227,7 +227,16 @@ for target in "${apply_list[@]}"; do
   label="${target%%|*}"
   path="${target#*|}"
   echo "-- $label --"
-  if ! "$KUBECTL" apply --server-side -f "$path"; then
+  # --force-conflicts: reconcile is BY DEFINITION the owner of everything it
+  # applies (README: repo -> live only; hand edits get reverted by design). A
+  # field-ownership conflict means some other manager -- a `kubectl set image`,
+  # a `kubectl edit`, a laptop apply -- took a field, which is precisely the
+  # drift this exists to undo. Without the flag the first real run dies on the
+  # first hand-edited field (observed 2026-07-24: custodian's image was owned by
+  # "kubectl-set") and reconcile can never converge. The diff + alert that ran
+  # BEFORE this point is what keeps the force honest: nothing is overwritten
+  # without having been reported first.
+  if ! "$KUBECTL" apply --server-side --force-conflicts -f "$path"; then
     fail "kubectl apply --server-side failed for $label"
   fi
 done

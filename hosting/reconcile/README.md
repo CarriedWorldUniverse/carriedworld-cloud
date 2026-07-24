@@ -88,6 +88,21 @@ It is also the honest way to answer "what has drifted?" at any time.
 
 Drop the variable (or set it empty) to arm the apply.
 
+## Field ownership (`--force-conflicts`)
+
+The apply runs `kubectl apply --server-side --force-conflicts`. Server-side
+apply tracks which manager owns each field; a `kubectl set image`, a
+`kubectl edit`, or an apply from a laptop takes ownership of what it touched
+and a plain server-side apply then REFUSES to overwrite it. Since reconcile's
+whole contract is that the repo wins, it forces the conflict and takes the
+field back — that is the same statement as "hand edits get reverted", just at
+field granularity rather than object granularity.
+
+This is safe precisely because the diff and the Discord alert happen BEFORE
+the apply: nothing is force-overwritten without having been reported first.
+If you need a field to stay under someone else's control, skip-list its
+manifest rather than weakening this flag.
+
 ## Break-glass
 
 Reconcile is **repo -> live only**. Any hand edit made directly against the

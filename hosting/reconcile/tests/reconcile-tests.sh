@@ -150,7 +150,7 @@ run_case "diff-exists" 0 \
   RECONCILE_WEBHOOK_FILE="$webhook_file"
 
 called "$log_file" "curl " || fail "diff-exists: webhook must be POSTed"
-called "$log_file" "kubectl apply --server-side" || fail "diff-exists: apply must be called with --server-side"
+called "$log_file" "kubectl apply --server-side --force-conflicts" || fail "diff-exists: apply must use --server-side --force-conflicts (reconcile owns the fields it applies)"
 order_before "$log_file" "curl " "kubectl apply --server-side"
 echo "PASS: diff-exists (webhook before apply, --server-side used)"
 
