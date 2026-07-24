@@ -1,0 +1,23 @@
+# ACTIVE skip-list for hosting/reconcile/reconcile.sh (see skip-list.example for
+# the format). Entries here are EXCLUDED from both diff and apply.
+#
+# Kept in the repo on purpose: a reconcile exception should be as visible and
+# reviewable as the manifests it suppresses, not a hidden file on one host.
+# Every entry states why it is here and what removes it.
+
+# --- pool worker charts: excluded until the pool actually works -------------
+# Operator decision 2026-07-24 (NEX-819 rollout). These four render zero-replica
+# Deployments (plus anvil/harrow/plumb PVCs) that do NOT exist live: they were
+# removed in the 2026-06-27 personal-cloud YAGNI load-drop. Their values files
+# say the broker's wake controller owns the replica count and scales 0->1 on
+# demand — but the pool cannot currently dispatch at all: spawned hands die in
+# 40-75s with no failure signal (NEX-818, repo=""/no git credential + results
+# recorded against a non-existent ledger issue).
+#
+# So creating the scaffolding now buys nothing and spends storage. REMOVE these
+# four lines once NEX-818 is fixed and the pool is dispatching again — at that
+# point reconcile will create them at 0 replicas, ready for the wake controller.
+anvil.values.yaml
+harrow.values.yaml
+keel.values.yaml
+plumb.values.yaml
