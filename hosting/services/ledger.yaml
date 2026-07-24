@@ -8,6 +8,9 @@ metadata:
   namespace: cwb
 spec:
   dnsNames:
+  # public SAN — live carries it; dropping it breaks TLS for anything
+  # reaching this pillar by its core.carriedworld.dev name (NEX-819).
+  - ledger.core.carriedworld.dev
   - ledger.cwb.svc
   - ledger.cwb.svc.cluster.local
   - ledger
@@ -53,6 +56,12 @@ spec:
       labels:
         app: ledger
     spec:
+      # amd64 pin: robo-dog is arm64 and these images are amd64-only, so without
+      # this the pod can schedule onto robo-dog and fail. Matches live
+      # (verified 2026-07-24, NEX-819).
+      nodeSelector:
+        kubernetes.io/arch: amd64
+
       containers:
       - env:
         - name: LEDGER_GRPC_ADDR

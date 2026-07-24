@@ -119,6 +119,9 @@ metadata:
 spec:
   secretName: porter-backup-tls
   dnsNames:
+    # public SAN — live carries it; dropping it breaks TLS for anything
+    # reaching this pillar by its core.carriedworld.dev name (NEX-819).
+    - porter-backup.core.carriedworld.dev
     - porter-backup.cwb.svc
     - porter-backup.cwb.svc.cluster.local
   usages:
@@ -152,6 +155,12 @@ spec:
       labels: { app: porter-backup }
     spec:
       serviceAccountName: porter-backup
+      # amd64 pin: robo-dog is arm64 and these images are amd64-only, so without
+      # this the pod can schedule onto robo-dog and fail. Matches live
+      # (verified 2026-07-24, NEX-819).
+      nodeSelector:
+        kubernetes.io/arch: amd64
+
       containers:
         - name: porter-backup
           image: ghcr.io/carriedworlduniverse/porter-backup:sha-8fcf7e2@sha256:2f2ad2ed76d6945c43e4bd71f80dba5532c080752a9a94b7ba780c7ce5dcb469

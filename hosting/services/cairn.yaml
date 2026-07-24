@@ -45,7 +45,10 @@ metadata:
   name: cairn
   namespace: cwb
 spec:
-  replicas: 1
+  # RETIRED (NEX-819): the cairn pillar runs as a CONTAINER inside cwb-core.
+  # This standalone deployment is scaled to 0 live; keep it 0 so a reconcile
+  # cannot resurrect it (same class as the porter-backup zombie, PR #46).
+  replicas: 0
   selector:
     matchLabels:
       app: cairn
@@ -147,13 +150,14 @@ spec:
   - name: http
     port: 8100
     protocol: TCP
-    targetPort: http
+    targetPort: 8100
   - name: grpc
     port: 8102
     protocol: TCP
-    targetPort: grpc
+    targetPort: 8102
   selector:
-    app: cairn
+    # cairn-rd is the live backing deployment (NEX-819, matches live)
+    app: cairn-rd
   type: ClusterIP
 
 ---
@@ -167,8 +171,9 @@ spec:
   - name: ssh
     port: 2222
     protocol: TCP
-    targetPort: ssh
+    targetPort: 2222
   selector:
-    app: cairn
+    # cairn-rd is the live backing deployment for ssh (NEX-819, matches live)
+    app: cairn-rd
   type: LoadBalancer
 
