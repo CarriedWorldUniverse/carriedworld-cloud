@@ -56,6 +56,15 @@ EOF
 cat >"$fake_bin_dir/curl" <<'EOF'
 #!/usr/bin/env bash
 echo "curl $*" >> "$RECONCILE_TEST_LOG"
+# Record the -d payload so a test can assert on its SIZE (Discord caps the
+# content field at 2000 chars and 400s anything larger -- verified live).
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "-d" ] && [ -n "${RECONCILE_TEST_PAYLOAD:-}" ]; then
+    printf '%s' "$a" > "$RECONCILE_TEST_PAYLOAD"
+  fi
+  prev="$a"
+done
 exit "${CURL_RC:-0}"
 EOF
 
@@ -75,11 +84,13 @@ run_case() {
   shift 2
   log_file="$work_dir/${name}.log"
   : >"$log_file"
+  rm -f "$work_dir/curl-payload.txt"
 
   set +e
   env -i \
     PATH="$fake_bin_dir:/usr/bin:/bin" \
     RECONCILE_TEST_LOG="$log_file" \
+    RECONCILE_TEST_PAYLOAD="$work_dir/curl-payload.txt" \
     RECONCILE_NO_PULL=1 \
     "$@" \
     bash "$reconcile_sh" >"$work_dir/${name}.out" 2>"$work_dir/${name}.err"
@@ -177,6 +188,23 @@ called "$log_file" "curl " || fail "diff-only: the alert must still be sent"
 not_called "$log_file" "kubectl apply" || fail "diff-only: apply must NEVER be called in diff-only mode"
 grep -q "DIFF-ONLY" "$work_dir/diff-only.out" || fail "diff-only: run must announce diff-only mode"
 echo "PASS: diff-only (alerted, apply never called)"
+
+# --- (vi) oversized alert payload ----------------------------------------------
+# Discord rejects content >2000 chars with HTTP 400 (verified live 2026-07-24).
+# A huge diff must still produce a SENDABLE alert, not a 400 that makes
+# reconcile refuse to apply.
+
+run_case "big-diff" 0 \
+  KUBECTL_DIFF_RC=1 \
+  KUBECTL_DIFF_BYTES=9000 \
+  RECONCILE_WEBHOOK_FILE="$webhook_file"
+
+called "$log_file" "curl " || fail "big-diff: alert must still be sent"
+[ -s "$work_dir/curl-payload.txt" ] || fail "big-diff: no curl payload captured -- the assertion below would pass vacuously"
+payload_len=$(wc -c <"$work_dir/curl-payload.txt")
+[ "$payload_len" -gt 200 ] || fail "big-diff: payload suspiciously small (${payload_len}) -- the diff body should be present"
+[ "$payload_len" -lt 2100 ] || fail "big-diff: payload is ${payload_len} bytes -- Discord caps content at 2000"
+echo "PASS: big-diff (payload capped to ${payload_len} bytes, alert sent)"
 
 echo
 echo "all reconcile scenarios passed"
