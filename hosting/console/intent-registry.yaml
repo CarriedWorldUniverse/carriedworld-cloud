@@ -104,7 +104,13 @@ intents:
       namespace: nexus
       objects:
         - { kind: Deployment, name: nexus-control }
-        - { kind: CronJob, name: drain-seeder, note: "purpose inferred from name only — verify before relying on this note" }
+        - kind: CronJob
+          name: drain-seeder
+          note: >-
+            seeds a builder work item each run telling the pool to drain the
+            shadow Jira queue (grounded from the live CronJob args
+            2026-07-24: `workitem create --role builder --task "Drain the
+            shadow-queue…" --dedupe`)
         - { kind: Deployment, name: gemma-ollama, note: scaled to 0 }
         - { kind: Deployment, name: gemma-vllm, note: scaled to 0 }
         - { kind: Deployment, name: lynxai, note: scaled to 0 }
@@ -249,9 +255,8 @@ intents:
   - id: embedding-index
     title: Embedding index
     purpose: >-
-      Semantic search index over the platform's stored knowledge (best-effort
-      description — no design doc found for this container; verify before
-      relying on it).
+      Turns stored knowledge into vectors so commonplace can answer "find me
+      the thing about X" instead of exact-text search.
     docs: []
     substrate:
       namespace: cwb
@@ -259,6 +264,9 @@ intents:
         - kind: Deployment
           name: cwb-core
           container: embed
+          note: >-
+            runs ollama/ollama:latest as an embedding server (grounded from
+            the live container image 2026-07-24, not from a design doc)
     scaled_to_zero: false
 
   - id: auth-gate
