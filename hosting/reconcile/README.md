@@ -88,6 +88,26 @@ It is also the honest way to answer "what has drifted?" at any time.
 
 Drop the variable (or set it empty) to arm the apply.
 
+## Installing on dMon (Fedora/SELinux — read this)
+
+    sudo git clone https://github.com/CarriedWorldUniverse/carriedworld-cloud /opt/carriedworld-cloud
+    sudo restorecon -RF /opt/carriedworld-cloud          # <-- do not skip
+    sudo cp /opt/carriedworld-cloud/hosting/reconcile/reconcile.{service,timer} /etc/systemd/system/
+    sudo systemctl daemon-reload && sudo systemctl enable --now reconcile.timer
+
+The `restorecon` matters: dMon runs SELinux in **enforcing** mode, and a tree
+that arrives in `/opt` by any route other than a fresh write there (a `mv` from
+`/var/lib`, an untarred archive, a copy from `/home`) keeps its old label.
+systemd then refuses to exec the script with a `203/EXEC Permission denied`
+that looks exactly like a missing +x bit — the mode is fine (git tracks it
+`100755`), the label is not. `ls -lZ` shows the truth: you want `usr_t`, not
+`var_lib_t`. Observed on the first install, 2026-07-24.
+
+Verify the timer: `systemctl list-timers reconcile.timer`, and read a run with
+`journalctl -u reconcile.service -n 40`. A healthy no-drift run ends
+`== no drift -- nothing to apply ==` and the unit goes `inactive` (correct for
+`Type=oneshot`, not a failure).
+
 ## Field ownership (`--force-conflicts`)
 
 The apply runs `kubectl apply --server-side --force-conflicts`. Server-side
