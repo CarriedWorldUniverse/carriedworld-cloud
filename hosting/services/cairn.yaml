@@ -156,7 +156,8 @@ spec:
     protocol: TCP
     targetPort: 8102
   selector:
-    app: cairn
+    # cairn-rd is the live backing deployment (NEX-819, matches live)
+    app: cairn-rd
   type: ClusterIP
 
 ---
