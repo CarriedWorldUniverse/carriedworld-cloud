@@ -3,18 +3,34 @@
 # claude-ornith front it. Sole GPU tenant since 2026-07-03 (gpu-mem-util 0.85,
 # vision moved to dMon).
 #
-# PREFIX CACHING (APC): OFF since 2026-07-09. It was enabled 2026-07-06
-# (repeated 25K-token prefix TTFT 22.9s -> 0.2s), but the experimental
-# hybrid-GDN Mamba-cache "align" mode HARD-WEDGES the engine under
-# CONCURRENT requests: with 2 concurrent builder prefills the engine froze
-# (stats logger stuck at "Running: 2 reqs" / 0.0 tok/s forever; every later
-# request hung until a pod restart). Reproduced twice on the pool's
-# concurrent-pair validation (2026-07-09); with APC removed the same pair
-# ran clean (2 reqs @ ~3.5K tok/s prefill, both completed). Cost of OFF:
-# every turn re-prefills the conversation (~23s at 25K tokens).
-# RE-ENABLE ONLY with a newer validated vLLM digest AND a 2-concurrent
-# long-prefill soak test passing (see shadow memory
-# reference_ornith_prefix_caching for the incident record).
+# PREFIX CACHING (APC): ON again since 2026-07-26, after the re-enable
+# precondition below was finally met.
+#
+# History: enabled 2026-07-06 (repeated 25K-token prefix TTFT 22.9s -> 0.2s),
+# then REMOVED 2026-07-09 because the experimental hybrid-GDN Mamba-cache
+# "align" mode hard-wedged the engine under CONCURRENT requests: with 2
+# concurrent builder prefills the engine froze (stats logger stuck at
+# "Running: 2 reqs" / 0.0 tok/s forever; every later request hung until a pod
+# restart), reproduced twice. Cost of OFF was a full re-prefill every turn
+# (~23s at 25K tokens). The stated bar for re-enabling was a validated digest
+# plus a 2-concurrent long-prefill soak.
+#
+# EVIDENCE FOR RE-ENABLING (2026-07-26), on THIS SAME digest — i.e. the very
+# build that wedged in July, so the change is the flag, not the image:
+#   - Single-shot: 25K prefix conc 1/2/4 and 120K prefix conc 2 — all clean.
+#     Repeated-prefix TTFT 3.6s -> 0.2s (25K) and 35.7s -> 0.4s (120K).
+#   - 8-HOUR AGENT-SHAPED SOAK: 253 cycles, 4 rotating load profiles (2-4
+#     concurrent agents, 5-14 turns each, contexts growing to 200K, staggered
+#     arrivals, tool definitions every request). ZERO wedges, zero failed
+#     cycles, no pod restarts, cache hit rate 50-83%, engine responsive after.
+#   - Needle-retrieval correctness 100% on cache hits — align mode is not
+#     serving stale or wrong content.
+#
+# HONEST LIMIT: this is one 8h synthetic soak; the July incident emerged from
+# real builder traffic over days. This is the strongest evidence available,
+# not proof of absence. If long multi-turn sessions ever go weird on Ornith,
+# suspect this flag FIRST — revert is dropping the one arg below.
+# Full record: shadow memory reference_ornith_prefix_caching.
 #
 # IMAGE: pinned by digest — "nightly" drifts, and hybrid-APC behaviour and
 # the qwen3 parsers are version-sensitive. This digest = the build validated
@@ -59,7 +75,11 @@ spec:
             # clients (ctxmap bench cache-hit%) can measure prefix-cache hits.
             # Reads 0 while APC is OFF; becomes meaningful when APC returns.
             - --enable-prompt-tokens-details
-            # --enable-prefix-caching intentionally ABSENT — see APC note above.
+            # APC: re-enabled 2026-07-26 after the 8h soak — see note above.
+            # Without this flag vLLM AUTO-DISABLES prefix caching for hybrid
+            # models (measured: 0% hit rate), so the flag is what selects the
+            # "align" mode that actually caches. Its absence is not neutral.
+            - --enable-prefix-caching
           env:
             - name: HF_HUB_OFFLINE
               value: "1"
