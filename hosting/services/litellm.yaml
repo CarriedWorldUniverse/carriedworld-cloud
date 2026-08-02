@@ -14,14 +14,43 @@ data:
   # had drifted to 4 stale routes while live carries 16 — applying the old block
   # would have deleted every kimi/glm/deepseek/vision/embedding route agora
   # depends on. Secrets remain os.environ/* references; no literal keys here.
+  #
+  # 2026-08-02 (operator decree): ds4-server on robo-dog (100.92.111.3:8000,
+  # OpenAI-compatible, model id "deepseek-v4-flash") was promoted to GA. Every
+  # LOCAL alias (code/general/control/ornith/ornith-judge/qwen3.6, plus the new
+  # ds4-flash alias) now resolves to that backend — alias NAMES are unchanged
+  # (consumers like ticket-pipeline reference ornith-judge by name; the point
+  # is they all resolve to whatever is currently active in ds4) but the
+  # previous per-alias distinctions (separate vllm-ornith / qwen3.6 NodePorts)
+  # are gone by operator decision, superseding the earlier "leave them honest
+  # about their down targets" call. Cloud aliases (glm-4.6, deepseek-*,
+  # kimi-k3) and the separate-modality local services (vision, gemma-4-12b,
+  # embeddings — not chat-completion swap-ins for a chat model) are untouched.
+  #
+  # Abstention system prompt ("If you are not confident, say you don't know.")
+  # was evaluated against this image's litellm version (main-stable, prompt
+  # registry present) for a declarative per-model system-prompt mechanism.
+  # None exists that fits here: the only prompt-injection path is the
+  # dotprompt/langfuse/generic "Prompt Management" system, which requires
+  # routing through a `dotprompt/<model>` alias prefix and a client-supplied
+  # `prompt_id` per call (it replaces/templates the message list rather than
+  # prepending a system message to whatever the caller sends), so it would
+  # change the alias's request contract for every caller instead of being a
+  # transparent per-alias default. No litellm_params.system_prompt /
+  # litellm_settings.default_system_message field exists in this version.
+  # Verdict: not clean — SKIPPED. The abstention instruction must be applied
+  # client-side (e.g. in ticket-pipeline's/agent's own system prompt) until
+  # litellm ships a plain per-model default-system-message config field.
   config.yaml: |
     model_list:
       - model_name: code
-        litellm_params: {model: openai/ornith, api_base: "http://100.92.111.3:30801/v1", api_key: dummy}
+        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
       - model_name: general
-        litellm_params: {model: openai/ornith, api_base: "http://100.92.111.3:30801/v1", api_key: dummy}
+        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
       - model_name: control
-        litellm_params: {model: openai/ornith, api_base: "http://100.92.111.3:30801/v1", api_key: dummy}
+        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
+      - model_name: ds4-flash
+        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
       - model_name: glm-4.6
         litellm_params: {model: openai/glm-4.6, api_base: "https://api.z.ai/api/coding/paas/v4", api_key: os.environ/ZAI_API_KEY}
       - model_name: deepseek-v4-flash
@@ -37,9 +66,9 @@ data:
       - model_name: kimi-k3
         litellm_params: {model: openrouter/moonshotai/kimi-k3, api_key: os.environ/OPENROUTER_API_KEY}
       - model_name: ornith
-        litellm_params: {model: openai/ornith, api_base: "http://100.92.111.3:30801/v1", api_key: dummy}
+        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
       - model_name: ornith-judge
-        litellm_params: {model: openai/ornith, api_base: "http://100.92.111.3:30801/v1", api_key: dummy, extra_body: {chat_template_kwargs: {enable_thinking: false}}}
+        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
       - model_name: vision
         litellm_params: {model: openai/gemma-4-12b, api_base: "http://100.91.185.71:30804/v1", api_key: dummy}
       - model_name: gemma-4-12b
@@ -47,7 +76,7 @@ data:
       - model_name: embeddings
         litellm_params: {model: openai/embeddinggemma, api_base: "http://100.92.111.3:30802/v1", api_key: dummy}
       - model_name: qwen3.6
-        litellm_params: {model: openai/qwen3.6, api_base: "http://100.92.111.3:30800/v1", api_key: dummy}
+        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
     litellm_settings: {drop_params: true}
 ---
 apiVersion: apps/v1
