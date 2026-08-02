@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ledger-rd
+  name: ledger-rd
+  namespace: cwb
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: ledger-rd
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: ledger-rd
+    spec:
+      containers:
+      - env:
+        - name: LEDGER_GRPC_ADDR
+          value: :8081
+        - name: LEDGER_ADDR
+          value: :8081
+        - name: LEDGER_DB
+          value: /var/lib/ledger/ledger.db
+        - name: LEDGER_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: LEDGER_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: LEDGER_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        image: ghcr.io/carriedworlduniverse/ledger:main
+        imagePullPolicy: IfNotPresent
+        name: ledger
+        ports:
+        - containerPort: 8081
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: tls
+          readOnly: true
+        - mountPath: /var/lib/ledger
+          name: data
+      imagePullSecrets:
+      - name: ghcr-pull
+      nodeSelector:
+        cwb/gpu: atom-gb10
+      restartPolicy: Always
+      volumes:
+      - name: tls
+        secret:
+          defaultMode: 420
+          secretName: ledger-tls
+      - hostPath:
+          path: /data/sovereign/ledger
+          type: Directory
+        name: data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledger-rd
+  namespace: cwb
+spec:
+  ports:
+  - port: 8081
+    protocol: TCP
+    targetPort: 8081
+  selector:
+    app: ledger-rd
+  type: ClusterIP

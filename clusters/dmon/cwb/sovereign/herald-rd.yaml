@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: herald-rd
+  name: herald-rd
+  namespace: cwb
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: herald-rd
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: herald-rd
+    spec:
+      containers:
+      - env:
+        - name: HERALD_SIGNING_KEY
+          valueFrom:
+            secretKeyRef:
+              key: signing_key
+              name: herald-secrets
+        - name: HERALD_GENESIS_OWNER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: genesis_owner_password
+              name: herald-secrets
+        - name: HERALD_ISSUER
+          value: http://dmonextreme.tail41686e.ts.net:8080/herald/
+        - name: HERALD_GATEWAY_URL
+          value: http://interchange-gateway.cwb.svc:8080
+        - name: HERALD_OIDC_CLIENTS
+          value: atlas|https://atlas.tail41686e.ts.net/oauth/callback
+        - name: HERALD_ADDR
+          value: :8099
+        - name: HERALD_GRPC_ADDR
+          value: :8098
+        - name: HERALD_DB
+          value: /var/lib/herald/herald.db
+        - name: HERALD_TLS_CERT
+          value: /etc/cwb/tls/tls.crt
+        - name: HERALD_TLS_KEY
+          value: /etc/cwb/tls/tls.key
+        - name: HERALD_TLS_CA
+          value: /etc/cwb/tls/ca.crt
+        image: ghcr.io/carriedworlduniverse/herald:main
+        imagePullPolicy: IfNotPresent
+        name: herald
+        ports:
+        - containerPort: 8098
+          protocol: TCP
+        - containerPort: 8099
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /etc/cwb/tls
+          name: tls
+          readOnly: true
+        - mountPath: /var/lib/herald
+          name: data
+      imagePullSecrets:
+      - name: ghcr-pull
+      nodeSelector:
+        cwb/gpu: atom-gb10
+      restartPolicy: Always
+      volumes:
+      - name: tls
+        secret:
+          defaultMode: 420
+          secretName: herald-tls
+      - hostPath:
+          path: /data/sovereign/herald
+          type: Directory
+        name: data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: herald-rd
+  namespace: cwb
+spec:
+  ports:
+  - name: grpc
+    port: 8098
+    protocol: TCP
+    targetPort: 8098
+  - name: http
+    port: 8099
+    protocol: TCP
+    targetPort: 8099
+  selector:
+    app: herald-rd
+  type: ClusterIP
