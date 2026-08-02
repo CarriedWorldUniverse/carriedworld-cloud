@@ -1,0 +1,77 @@
+[Unit]
+Description=ds4 (DwarfStar) model server - GB10 local AI
+Documentation=https://github.com/nexus-cw/ds4
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jacinta
+Group=jacinta
+WorkingDirectory=/home/jacinta/src/ds4
+Environment=PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=CUDA_HOME=/usr/local/cuda
+
+# GA-0731 promotion (2026-08-02, research/gb10 MEASUREMENTS.md commit a335048
+# "PRODUCTION CONFIG BLOCK"): streamed MXFP4 GA model replaces the resident
+# IQ2XXS model. 12/12 on the ds4-eval battery (vs IQ2's 10/12) and a
+# manually-reviewed hallucination rate of 45.5% plain / 7.1% with the
+# abstention system prompt (set in litellm, not here -- see MEASUREMENTS.md).
+# Decode throughput is lower than IQ2's resident 16.29 t/s but "usable
+# interactive" per that unit's own numbers; the tradeoff is accepted for the
+# quality gain.
+#
+# --ctx 32768 (prudence deviation from the a335048 recommendation of 65536):
+# the 75GB --ssd-streaming-cache-experts budget was only verified stable at
+# --ctx 16384 (eval) and default ctx (warm session) in that unit -- 65536 was
+# explicitly flagged there as NOT re-tested at 75GB. 32768 still covers
+# agentic sessions comfortably and adds only ~1.5GB KV/session over 16384;
+# treat 65536 as a later step, gated on a fresh headroom validation pass
+# before it is used in production.
+ExecStart=/home/jacinta/src/ds4/ds4-server \
+  -m /home/jacinta/src/ds4/gguf/DeepSeek-V4-Flash-0731-MXFP4_MOE-Q8_0.gguf \
+  --cuda --ssd-streaming --ssd-streaming-cache-experts 75GB \
+  --host 0.0.0.0 --port 8000 --ctx 32768 --batched-session 2 \
+  --kv-disk-dir /home/jacinta/.ds4/kv
+
+# Instant rollback to the prior IQ2XXS resident production config (in case the
+# streamed GA config crash-loops, OOMs, or thrashes under real load):
+#   ExecStart=/home/jacinta/src/ds4/ds4-server \
+#     -m /home/jacinta/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix.gguf \
+#     --cuda --host 0.0.0.0 --port 8000 --ctx 16384 --batched-session 2 \
+#     --gpu-vram 88 --kv-disk-dir /home/jacinta/.ds4/kv
+#   (restore MemoryMax=96G/MemoryHigh=92G below if reverting -- they are left
+#   in place currently since they are harmless for either config; the ~75-85
+#   GiB observed for the streamed config plus cluster-tenant needs is what the
+#   96GB envelope below is sized for.)
+# The IQ2 gguf file is left in place on disk specifically so this swap is a
+# one-line ExecStart edit + daemon-reload + restart, no re-download needed.
+
+# Memory ceiling / envelope rationale (updated for the streamed GA config):
+# GA's --ssd-streaming-cache-experts is set to 75GB per the a335048 unit's
+# explicit constraint ("use 75GB, not 100GB" -- 100GB was directly observed to
+# thrash this box to real swap and near-zero free memory on this artifact).
+# Observed resident footprint for the streamed cache + working set was
+# ~75-85 GiB in that unit's testing. This box is a k3s node with other
+# cluster tenants (cwb/traefik/litellm etc.) that need ~10GB+ free at all
+# times; 96GB leaves that headroom against the ~85GB high-water mark.
+# MemoryMax is known-inert for CUDA processes on this box (confirmed in
+# earlier units) -- it is left set as documentation/best-effort only. The
+# real safety mechanism is the budget choice above (75GB, not 100GB) plus
+# oom_score_adj below making ds4 the preferred OOM victim if headroom is
+# ever exceeded anyway.
+MemoryMax=96G
+MemoryHigh=92G
+
+# ds4 already sets oom_score_adj=1000 itself (prefers to be the OOM victim);
+# this makes that explicit and survives any future change.
+OOMScoreAdjust=900
+
+Restart=on-failure
+RestartSec=15
+TimeoutStartSec=600
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
