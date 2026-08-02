@@ -4,6 +4,24 @@
 # http://vllm-qwen36.model-stack.svc.cluster.local:8000/v1 (served-model-name "qwen3.6", no API key).
 # Tool-calling enabled 2026-06-22: --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3
 # (the model's chat_template emits <tool_call><function=..></function></tool_call> -> qwen3_xml parser).
+#
+# 2026-08-02: synced to what's actually live (was applied ad-hoc via kubectl,
+# never captured here or on the stale infra/sovereign-data-node-2026-07-04
+# branch's 4e938a4, which only partially caught up -- it left the image on
+# "nightly" while live had already moved to a resolved digest). Also matches
+# shadow memory project-robodog-vllm-memory-config: kv-cache-memory pinned
+# to 2GiB, max-num-seqs capped at 64 (hybrid-Mamba: one cache block per
+# concurrent decode sequence, 2GiB fits 99 blocks), gpu-memory-utilization
+# is inert once kv-cache-memory is explicit, max-model-len cut 262144 ->
+# 65536 to fit alongside vllm-ornith on the same GB10.
+#
+# IMAGE: pinned by digest (was "nightly", which drifts) -- this is the digest
+# actually running 2026-08-02. Bump deliberately.
+#
+# NOTE: this file lives under clusters/dmon/atom/, which reconcile.sh's
+# `kubectl diff -f clusters/dmon` (no -R) does not descend into -- reconcile
+# has never diffed or applied this file. Flagged for the orchestrator/operator
+# as a reconcile coverage gap, not fixed here.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,7 +39,7 @@ spec:
       nodeSelector: { cwb/gpu: atom-gb10 }   # pin to the GB10 (robo-dog)
       containers:
         - name: vllm
-          image: vllm/vllm-openai:nightly
+          image: vllm/vllm-openai@sha256:c1dd1b91ac51af946eb4ce36f3c4f7eda2a00d12d57a6bc7b1991786619653f5
           imagePullPolicy: IfNotPresent
           args:
             - "--model"
@@ -30,9 +48,9 @@ spec:
             - "qwen3.6"
             - "--trust-remote-code"
             - "--gpu-memory-utilization"
-            - "0.55"
+            - "0.50"
             - "--max-model-len"
-            - "262144"
+            - "65536"
             - "--port"
             - "8000"
             - "--enable-auto-tool-choice"
@@ -40,6 +58,11 @@ spec:
             - "qwen3_xml"
             - "--reasoning-parser"
             - "qwen3"
+            - "--enable-prefix-caching"
+            - "--kv-cache-memory"
+            - "2147483648"
+            - "--max-num-seqs"
+            - "64"
           env:
             - name: HF_HUB_OFFLINE
               value: "1"

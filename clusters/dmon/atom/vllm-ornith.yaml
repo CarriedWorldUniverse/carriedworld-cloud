@@ -1,7 +1,7 @@
 # Ornith-1.0-35B-NVFP4 (Qwen3.5-MoE hybrid GDN) served by vLLM on robo-dog
 # (GB10 / ATOM, sm_121). Namespace: model-stack. NodePort 30801; litellm and
-# claude-ornith front it. Sole GPU tenant since 2026-07-03 (gpu-mem-util 0.85,
-# vision moved to dMon).
+# claude-ornith front it. Sole GPU tenant since 2026-07-03 (vision moved to
+# dMon, ollama moved to CPU).
 #
 # PREFIX CACHING (APC): OFF since 2026-07-09. It was enabled 2026-07-06
 # (repeated 25K-token prefix TTFT 22.9s -> 0.2s), but the experimental
@@ -16,9 +16,35 @@
 # long-prefill soak test passing (see shadow memory
 # reference_ornith_prefix_caching for the incident record).
 #
+# *** 2026-08-02 migration note: live currently runs WITH --enable-prefix-caching
+# (verified via `kubectl get deploy -o jsonpath`), contradicting the "OFF" note
+# above. It is not clear the 2-concurrent soak test above was re-run before this
+# was flipped live -- the flip predates this migration and was never recorded in
+# either IaC checkout, it was applied by hand (kubectl set/edit; the deployment's
+# last-applied-configuration annotation is stale relative to the live spec).
+# This manifest is captured to MATCH LIVE below so the record is accurate, but
+# the contradiction with the incident note above needs an operator decision:
+# either the hard-wedge risk is understood and accepted, or APC needs to be
+# turned back off live. See also: this file lives under clusters/dmon/atom/,
+# which `reconcile.sh`'s `kubectl diff -f clusters/dmon` (no -R) does NOT
+# descend into -- reconcile has never seen this file's drift and won't apply
+# this commit either. Flagged for the orchestrator/operator, not fixed here.
+#
+# KV cache / concurrency (2026-08-02, matches shadow memory
+# project-robodog-vllm-memory-config): kv-cache-memory pinned to 2GiB and
+# max-num-seqs capped at 64. Ornith is a Qwen3.5-MoE hybrid-Mamba
+# architecture -- each concurrent decode sequence consumes one Mamba cache
+# block, and 2GiB fits only 99 blocks, so max-num-seqs must be capped or
+# engine init fails during CUDA graph capture. gpu-memory-utilization is
+# inert once kv-cache-memory is set explicitly; max-model-len cut to 65536
+# live (was 262144) -- measured KV utilisation was well under capacity at
+# the old settings, so this frees GB10 unified memory for other tenants
+# without affecting practical headroom.
+#
 # IMAGE: pinned by digest — "nightly" drifts, and hybrid-APC behaviour and
 # the qwen3 parsers are version-sensitive. This digest = the build validated
-# 2026-07-06. Bump deliberately, then re-run the repeated-prefix TTFT check.
+# 2026-07-06, and is still what's running live 2026-08-02. Bump deliberately,
+# then re-run the repeated-prefix TTFT check.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -45,9 +71,9 @@ spec:
             - ornith
             - --trust-remote-code
             - --gpu-memory-utilization
-            - "0.85"
+            - "0.50"
             - --max-model-len
-            - "262144"
+            - "65536"
             - --port
             - "8000"
             - --enable-auto-tool-choice
@@ -55,11 +81,11 @@ spec:
             - qwen3_xml
             - --reasoning-parser
             - qwen3
-            # usage reporting: surfaces prompt_tokens_details.cached_tokens so
-            # clients (ctxmap bench cache-hit%) can measure prefix-cache hits.
-            # Reads 0 while APC is OFF; becomes meaningful when APC returns.
-            - --enable-prompt-tokens-details
-            # --enable-prefix-caching intentionally ABSENT — see APC note above.
+            - --enable-prefix-caching
+            - --kv-cache-memory
+            - "2147483648"
+            - --max-num-seqs
+            - "64"
           env:
             - name: HF_HUB_OFFLINE
               value: "1"
