@@ -28,7 +28,12 @@ metadata:
   namespace: model-stack
   labels: {app: ollama}
 spec:
-  replicas: 1
+  # replicas 0 (2026-08-02, migrated from stale infra/sovereign-data-node-2026-07-04
+  # branch commit 24f0c70): robo-dog is dedicated to ds4 now; this was previously
+  # applied by hand and silently re-scaled back to 1 by reconcile because this
+  # repo (the reconcile authority) still said replicas: 1. Fixing the source of
+  # truth so reconcile stops fighting the intended state.
+  replicas: 0
   strategy: {type: Recreate}   # single-writer RWO model cache
   selector:
     matchLabels: {app: ollama}
