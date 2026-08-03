@@ -29,20 +29,23 @@ Environment=DS4_KV_PIN_MIN_HITS=2
 # interactive" per that unit's own numbers; the tradeoff is accepted for the
 # quality gain.
 #
-# --ctx 32768 (prudence deviation from the a335048 recommendation of 65536):
-# the 75GB --ssd-streaming-cache-experts budget was only verified stable at
-# --ctx 16384 (eval) and default ctx (warm session) in that unit -- 65536 was
-# explicitly flagged there as NOT re-tested at 75GB. 32768 still covers
-# agentic sessions comfortably and adds only ~1.5GB KV/session over 16384;
-# treat 65536 as a later step, gated on a fresh headroom validation pass
-# before it is used in production.
+# --ctx 65536 (promoted 2026-08-03 after the fresh headroom validation the
+# prudence deviation required; validated at the 70GB cache budget): boot plan
+# unchanged at 6.38 GiB prefill headroom + 63.61 GiB cache; context buffers
+# 1739.75 MiB per slot at ctx=65536. Deep-context exercise drove one session
+# to ~45k tokens with a second concurrent slot active: min MemAvailable
+# 19.5 GiB (floor criterion 8 GiB), swap dipped ~2.2 GiB with no thrash,
+# no server errors. Warm shallow decode 5.36 t/s (baseline 5.35); decode at
+# 45k depth 4.78 t/s (-10.7 percent, within the 15 percent band). 65536 is the
+# model TRAINED original_context_length (/v1/capabilities: trained=65536;
+# the GGUF-declared 1048576 is a 16x RoPE stretch).
 # 70GB expert cache (promoted 2026-08-03, A/B in MEASUREMENTS.md commit 2ff5cf1):
 # vs 75GB the measured warm cost is -1.4 percent (5.35 vs 5.42 t/s manual-REPL)
 # for ~5.4 GiB freed (MemAvailable ~24 GiB) -- banked for multi-session work.
 ExecStart=/home/jacinta/src/ds4/ds4-server \
   -m /home/jacinta/src/ds4/gguf/DeepSeek-V4-Flash-0731-MXFP4_MOE-Q8_0.gguf \
   --cuda --ssd-streaming --ssd-streaming-cache-experts 70GB \
-  --host 0.0.0.0 --port 8000 --ctx 32768 --batched-session 2 \
+  --host 0.0.0.0 --port 8000 --ctx 65536 --batched-session 2 \
   --kv-disk-dir /home/jacinta/.ds4/kv --kv-disk-space-mb 16384
 
 # Instant rollback to the prior IQ2XXS resident production config (in case the
