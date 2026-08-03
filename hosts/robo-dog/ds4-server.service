@@ -36,9 +36,12 @@ Environment=DS4_KV_PIN_MIN_HITS=2
 # agentic sessions comfortably and adds only ~1.5GB KV/session over 16384;
 # treat 65536 as a later step, gated on a fresh headroom validation pass
 # before it is used in production.
+# 70GB expert cache (promoted 2026-08-03, A/B in MEASUREMENTS.md commit 2ff5cf1):
+# vs 75GB the measured warm cost is -1.4 percent (5.35 vs 5.42 t/s manual-REPL)
+# for ~5.4 GiB freed (MemAvailable ~24 GiB) -- banked for multi-session work.
 ExecStart=/home/jacinta/src/ds4/ds4-server \
   -m /home/jacinta/src/ds4/gguf/DeepSeek-V4-Flash-0731-MXFP4_MOE-Q8_0.gguf \
-  --cuda --ssd-streaming --ssd-streaming-cache-experts 75GB \
+  --cuda --ssd-streaming --ssd-streaming-cache-experts 70GB \
   --host 0.0.0.0 --port 8000 --ctx 32768 --batched-session 2 \
   --kv-disk-dir /home/jacinta/.ds4/kv --kv-disk-space-mb 16384
 
