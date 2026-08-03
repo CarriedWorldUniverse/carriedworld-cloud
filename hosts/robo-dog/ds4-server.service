@@ -12,6 +12,14 @@ WorkingDirectory=/home/jacinta/src/ds4
 Environment=PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=CUDA_HOME=/usr/local/cuda
 
+# KV prefix pinning (task #16, research/gb10 KV_PINNING.md, commit e83d95d,
+# enabled 2026-08-03): anchor checkpoints hit >=2 times are never evicted by
+# the disk budget. Restores a claude-CLI-scale 24k-token system prompt in
+# ~0.2s vs ~15min of prefill; the store has no TTL so pinned prefixes
+# survive restarts indefinitely. Budget raised 4096->16384 MB alongside
+# (each large anchor is ~340 MiB; disk has >100GB free).
+Environment=DS4_KV_PIN_MIN_HITS=2
+
 # GA-0731 promotion (2026-08-02, research/gb10 MEASUREMENTS.md commit a335048
 # "PRODUCTION CONFIG BLOCK"): streamed MXFP4 GA model replaces the resident
 # IQ2XXS model. 12/12 on the ds4-eval battery (vs IQ2's 10/12) and a
@@ -32,7 +40,7 @@ ExecStart=/home/jacinta/src/ds4/ds4-server \
   -m /home/jacinta/src/ds4/gguf/DeepSeek-V4-Flash-0731-MXFP4_MOE-Q8_0.gguf \
   --cuda --ssd-streaming --ssd-streaming-cache-experts 75GB \
   --host 0.0.0.0 --port 8000 --ctx 32768 --batched-session 2 \
-  --kv-disk-dir /home/jacinta/.ds4/kv
+  --kv-disk-dir /home/jacinta/.ds4/kv --kv-disk-space-mb 16384
 
 # Instant rollback to the prior IQ2XXS resident production config (in case the
 # streamed GA config crash-loops, OOMs, or thrashes under real load):
