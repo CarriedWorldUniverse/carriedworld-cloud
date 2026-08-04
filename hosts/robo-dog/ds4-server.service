@@ -21,6 +21,12 @@ Environment=CUDA_HOME=/usr/local/cuda
 # (each large anchor is ~340 MiB; disk has >100GB free).
 Environment=DS4_KV_PIN_MIN_HITS=2
 
+# Embedding-table mmap (task 22, 2026-08-04): serve token_embd row lookups from
+# the read-only host mapping via ATS instead of a resident copy. Measured: -1010
+# MiB resident, decode/prefill within noise, worst-case 2.5s one-time transient
+# after a page-cache drop. MEASUREMENTS.md task-22 section.
+Environment=DS4_EMBD_MMAP=1
+
 # GA-0731 promotion (2026-08-02, research/gb10 MEASUREMENTS.md commit a335048
 # "PRODUCTION CONFIG BLOCK"): streamed MXFP4 GA model replaces the resident
 # IQ2XXS model. 12/12 on the ds4-eval battery (vs IQ2's 10/12) and a
