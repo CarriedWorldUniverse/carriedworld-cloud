@@ -29,10 +29,20 @@ Environment=DS4_KV_PIN_MIN_HITS=2
 # interactive" per that unit's own numbers; the tradeoff is accepted for the
 # quality gain.
 #
-# --ctx 65536 (promoted 2026-08-03 after the fresh headroom validation the
-# prudence deviation required; validated at the 70GB cache budget): boot plan
-# unchanged at 6.38 GiB prefill headroom + 63.61 GiB cache; context buffers
-# 1739.75 MiB per slot at ctx=65536. Deep-context exercise drove one session
+# --ctx 131072 (promoted 2026-08-04, 2x RoPE stretch of trained=65536; full
+# validation in research/gb10 MEASUREMENTS.md): boot plan 6.38 GiB prefill
+# headroom + 63.61 GiB cache unchanged; context buffers 3111.75 MiB per slot
+# (2 slots >= 6.08 GiB). Deep exercise to 101k prompt tokens: min MemAvailable
+# 16.5 GiB (floor 8 GiB), swap peak ~1.2 GiB no thrash. Quality gate 7/7
+# needle recall incl. 80k/90k/100k stretch zone + correct multi-depth
+# reasoning. Prefill ~29.5 t/s at 101k; decode 4.2 t/s at 101k depth
+# (5.36 shallow warm, 4.02 at 56k). Caveat: this build re-prefills full
+# context per request (turn-boundary token-mismatch defeats live-KV reuse,
+# both chat and anthropic APIs) -- a 101k prompt costs ~60 min prefill.
+# 256k arm aborted by operator at 32.5 percent prefill (min MemAvailable
+# 10.9 GiB, swap peak ~2.8 GiB): bs=2 boots (5855.75 MiB/slot) but not
+# validated for quality.
+# Prior 65536 validation (2026-08-03): context buffers 1739.75 MiB per slot. Deep-context exercise drove one session
 # to ~45k tokens with a second concurrent slot active: min MemAvailable
 # 19.5 GiB (floor criterion 8 GiB), swap dipped ~2.2 GiB with no thrash,
 # no server errors. Warm shallow decode 5.36 t/s (baseline 5.35); decode at
@@ -45,7 +55,7 @@ Environment=DS4_KV_PIN_MIN_HITS=2
 ExecStart=/home/jacinta/src/ds4/ds4-server \
   -m /home/jacinta/src/ds4/gguf/DeepSeek-V4-Flash-0731-MXFP4_MOE-Q8_0.gguf \
   --cuda --ssd-streaming --ssd-streaming-cache-experts 70GB \
-  --host 0.0.0.0 --port 8000 --ctx 65536 --batched-session 2 \
+  --host 0.0.0.0 --port 8000 --ctx 131072 --batched-session 2 \
   --kv-disk-dir /home/jacinta/.ds4/kv --kv-disk-space-mb 16384
 
 # Instant rollback to the prior IQ2XXS resident production config (in case the
