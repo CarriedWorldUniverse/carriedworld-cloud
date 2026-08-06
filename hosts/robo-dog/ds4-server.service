@@ -19,20 +19,20 @@ Environment=CUDA_HOME=/usr/local/cuda
 # survive restarts indefinitely. Budget 4096->16384 (2026-08-03) ->32768 MB
 # (2026-08-04, task 24 chain anchors: ~16 MiB/1k tokens, 128k lineage ~10GB)
 # (each large anchor is ~340 MiB; disk has >100GB free).
-Environment=DS4_KV_PIN_MIN_HITS=2
+# (value now lives in /etc/accretion/ds4-server.env)
 
 # Embedding-table mmap (task 22, 2026-08-04): serve token_embd row lookups from
 # the read-only host mapping via ATS instead of a resident copy. Measured: -1010
 # MiB resident, decode/prefill within noise, worst-case 2.5s one-time transient
 # after a page-cache drop. MEASUREMENTS.md task-22 section.
-Environment=DS4_EMBD_MMAP=1
+# (value now lives in /etc/accretion/ds4-server.env)
 
 # Mixed prefill quantum raised 128->2048 (2026-08-07): with expert streaming, a
 # 128-token quantum re-pays a near-full expert sweep per slice, collapsing
 # concurrent-prefill throughput to ~2 t/s (observed live: a claude CLI ping
 # decoding beside a 28k prefill starved both; ETA 3.7h). 2048 keeps decode
 # turn-taking responsive while preserving prefill amortization.
-Environment=DS4_SERVER_MIXED_PREFILL_QUANTUM=2048
+# (value now lives in /etc/accretion/ds4-server.env)
 
 # GA-0731 promotion (2026-08-02, research/gb10 MEASUREMENTS.md commit a335048
 # "PRODUCTION CONFIG BLOCK"): streamed MXFP4 GA model replaces the resident
@@ -66,11 +66,19 @@ Environment=DS4_SERVER_MIXED_PREFILL_QUANTUM=2048
 # 70GB expert cache (promoted 2026-08-03, A/B in MEASUREMENTS.md commit 2ff5cf1):
 # vs 75GB the measured warm cost is -1.4 percent (5.35 vs 5.42 t/s manual-REPL)
 # for ~5.4 GiB freed (MemAvailable ~24 GiB) -- banked for multi-session work.
+# Accretion env-file layout (migrated 2026-08-07): model, ctx and the
+# per-model flags come from /etc/accretion/ds4-server.env; a model swap via
+# POST /v1/models/select rewrites that file and drain-restarts this unit
+# (server exits with the swap code; Restart=on-failure brings it back on the
+# new selection). Per-model proven flags live in <model>.gguf.env sidecars.
+# systemd does no shell parsing: ${DS4_MODEL}/${DS4_CTX} are whole words,
+# $DS4_EXTRA_FLAGS is word-split -- exactly what the flag list needs.
+EnvironmentFile=/etc/accretion/ds4-server.env
 ExecStart=/home/jacinta/src/ds4/ds4-server \
-  -m /home/jacinta/src/ds4/gguf/DeepSeek-V4-Flash-0731-MXFP4_MOE-Q8_0.gguf \
-  --cuda --ssd-streaming --ssd-streaming-cache-experts 70GB \
-  --host 0.0.0.0 --port 8000 --ctx 131072 --batched-session 2 \
-  --kv-disk-dir /home/jacinta/.ds4/kv --kv-disk-space-mb 32768
+  -m ${DS4_MODEL} \
+  --cuda --host 0.0.0.0 --port 8000 --ctx ${DS4_CTX} --batched-session 2 \
+  --kv-disk-dir /home/jacinta/.ds4/kv --kv-disk-space-mb 32768 \
+  $DS4_EXTRA_FLAGS
 
 # Instant rollback to the prior IQ2XXS resident production config (in case the
 # streamed GA config crash-loops, OOMs, or thrashes under real load):
