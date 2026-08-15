@@ -1,0 +1,40 @@
+# The interchange gateway's stable edge Service.
+#
+# CAPTURED 2026-08-16: this Service existed ONLY in the live cluster — it was
+# created out-of-band and no manifest for it lived in this repo, so reconcile
+# never saw it and nobody would have noticed it break. It is captured here both
+# to bring it under the drift loop and to fix it.
+#
+# THE FIX: the standalone `interchange-gateway` Deployment is at 0 replicas (the
+# gateway moved into cwb-core as the `gateway` container), so the old
+# `app: interchange-gateway` selector matched nothing and this LoadBalancer had
+# ZERO endpoints. herald-rd is configured with
+# HERALD_GATEWAY_URL=http://interchange-gateway.cwb.svc:8080, so its gateway
+# calls were failing against an empty Service. Select cwb-core via its
+# per-service marker label, the same way porter-backup now does.
+#
+# targetPort is gw-http (cwb-core's name for containerPort 8080), NOT the old
+# `http` — port names are pod-local and the pillar pod names each container's
+# port distinctly.
+#
+# nodePort 30445 is PINNED to the value the live Service already had. Omitting
+# it would make the apiserver allocate a fresh nodePort and silently move the
+# external listener.
+apiVersion: v1
+kind: Service
+metadata:
+  name: interchange-gateway
+  namespace: cwb
+  labels:
+    app: interchange-gateway
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Cluster
+  selector:
+    app.cwb/interchange-gateway: "true"
+  ports:
+    - name: http
+      port: 8080
+      targetPort: gw-http
+      nodePort: 30445
+      protocol: TCP

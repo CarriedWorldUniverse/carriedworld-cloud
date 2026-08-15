@@ -210,10 +210,20 @@ metadata:
     app: porter-backup
 spec:
   type: ClusterIP
+  # REPOINTED 2026-08-16: the standalone deployment above is RETIRED (replicas 0,
+  # see the comment there), so `app: porter-backup` selected NOTHING and this
+  # Service had zero endpoints. Every atlas poll of the backup clock got
+  # "connection refused" — atlas alerted continuously while backups were in fact
+  # running fine inside cwb-core. Select the consolidated pillar pod instead, via
+  # the per-service marker label it carries.
+  #
+  # targetPort MUST be porter-grpc, not grpc: cwb-core names its port
+  # `porter-grpc` (names are pod-local, and the pillar pod disambiguates ten
+  # containers' ports). A selector-only fix still resolves to nothing.
   selector:
-    app: porter-backup
+    app.cwb/porter-backup: "true"
   ports:
     - name: grpc
       port: 8087
-      targetPort: grpc
+      targetPort: porter-grpc
       protocol: TCP
