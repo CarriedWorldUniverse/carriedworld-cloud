@@ -1,0 +1,15 @@
+# CAPTURE of robo-dog's /etc/rancher/k3s/config.yaml (k3s AGENT).
+#
+# Captured, not applied -- see hosts/dmon/k3s-config.yaml for the full incident
+# writeup and why flannel-iface must be set on BOTH nodes, not just this one.
+#
+# Created 2026-08-16. The file did not exist before: robo-dog's agent got its
+# --node-ip/--node-external-ip from flags in the systemd unit, and had no
+# flannel-iface anywhere, which is exactly how flannel ended up choosing the
+# stale LAN interface. Putting it in config.yaml rather than editing the unit
+# keeps it out of the way of a k3s reinstall, which rewrites the unit but leaves
+# config.yaml alone.
+#
+# The pre-existing --node-ip/--node-external-ip=100.92.111.3 flags remain in the
+# unit; they were already correct and were not touched.
+flannel-iface: tailscale0

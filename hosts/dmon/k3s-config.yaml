@@ -1,0 +1,28 @@
+# CAPTURE of dMon's /etc/rancher/k3s/config.yaml (k3s SERVER).
+#
+# Captured, not applied: reconcile only drives Kubernetes objects, so nothing
+# copies this file to the host. It is here so the host's k3s configuration is
+# reviewable in git and reproducible from RECOVERY.md instead of living only on
+# one laptop's disk. If you change the host, change this file in the same PR.
+#
+# flannel-iface (added 2026-08-16) is the load-bearing line. Background:
+# robo-dog's LAN address moved (192.168.143.124 -> .248) when it was reworked.
+# k3s node-ip/node-external-ip had already been moved to Tailscale, but flannel
+# picks its interface from the DEFAULT ROUTE, so it kept advertising the dead LAN
+# address as its VXLAN endpoint. All cross-node pod traffic blackholed: pods on
+# robo-dog could reach the internet (via the node's own NAT) but could not reach
+# CoreDNS on dMon, so they had NO DNS at all.
+#
+# Both ends must be set. Setting it on robo-dog alone left the tunnel asymmetric
+# -- robo-dog sourced from its Tailscale address but still routed to dMon's LAN
+# address, so packets arrived on the ethernet NIC in the FedoraWorkstation
+# firewalld zone and were dropped (only tailscale0 is in the trusted zone).
+# Setting it on BOTH puts the whole tunnel on Tailscale and in the trusted zone.
+#
+# Bonus: flannel derives VXLAN MTU from this interface. tailscale0 is MTU 1280,
+# so pods get 1230 instead of the 1450 they had -- the old value would have meant
+# silent large-packet loss even once the tunnel worked.
+tls-san:
+  - 100.91.185.71
+  - dmonextreme.tail41686e.ts.net
+flannel-iface: tailscale0

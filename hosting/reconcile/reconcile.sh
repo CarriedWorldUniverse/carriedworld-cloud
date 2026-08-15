@@ -131,7 +131,23 @@ fi
 
 targets=()
 
-targets+=("clusters/dmon|clusters/dmon")
+# clusters/dmon, ONE TARGET PER FILE, recursively.
+#
+# This used to be a single `clusters/dmon|clusters/dmon` entry. `kubectl diff -f
+# <dir>` does NOT recurse without -R, so that entry only ever checked the ONE
+# top-level file (coredns-custom.yaml) and silently ignored every manifest in
+# atom/, cwb/ and gpu/ -- twelve files, including the whole robo-dog sovereign
+# cutover. "no drift" was green the entire time those went unchecked, which is
+# precisely the blind spot this script exists to close (found 2026-08-16 while
+# chasing a Service that had had zero endpoints for weeks).
+#
+# Per FILE rather than a single -R target on purpose: is_skipped() matches the
+# label, so a file-level label is what makes a single stale manifest skippable
+# without exempting the entire directory tree.
+while IFS= read -r f; do
+  [ -e "$f" ] || continue
+  targets+=("$f|$f")
+done < <(find clusters/dmon -type f -name '*.yaml' | sort)
 
 for f in hosting/services/*.yaml; do
   case "$f" in *.values.yaml) continue ;; esac

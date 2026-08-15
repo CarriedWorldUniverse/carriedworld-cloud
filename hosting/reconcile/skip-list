@@ -21,3 +21,24 @@ anvil.values.yaml
 harrow.values.yaml
 keel.values.yaml
 plumb.values.yaml
+
+# --- stale model-stack manifests: excluded until rewritten ------------------
+# Added 2026-08-16, together with the change that makes reconcile walk
+# clusters/dmon per-file. Those twelve manifests had never been diffed (see the
+# comment in reconcile.sh), so bringing them under the loop applies them for the
+# first time -- and these five are STALE: robo-dog and the local model stack have
+# been reworked since they were written (operator, 2026-08-16).
+#
+# Applying them would not merely record drift, it would ACT: each carries
+# nvidia.com/gpu=1 and would scale 0->1, starting five GPU workloads from
+# obsolete definitions. vllm-gemma4-vision-dmon targets cwb/gpu=dmon-5090 -- the
+# GPU dMon trains on -- and gemma-ollama/gemma-vllm carry NO nodeSelector, so
+# they would land on whichever node has a free GPU.
+#
+# REMOVE each line once that manifest has been rewritten to match the current
+# stack. Deleting a line arms a real GPU deployment, so re-read it before you do.
+clusters/dmon/atom/vllm-ornith.yaml
+clusters/dmon/atom/vllm-qwen36.yaml
+clusters/dmon/gpu/gemma-4-12b-vllm.yaml
+clusters/dmon/gpu/gemma-ollama.yaml
+clusters/dmon/gpu/vllm-gemma4-vision-dmon.yaml
