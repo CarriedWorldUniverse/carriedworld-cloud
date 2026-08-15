@@ -45,7 +45,27 @@ metadata:
   name: commonplace
   namespace: cwb
 spec:
-  replicas: 1
+  # RETIRED 2026-08-16 (operator: commonplace belongs in the cwb-core pillar pod,
+  # not standalone): this copy was still running AND still selected by the
+  # Service, while the cwb-core `commonplace` container ran alongside it.
+  #
+  # They mount the SAME PVC (commonplace-data, ReadWriteOnce, local-path) at the
+  # same path, and both pods sit on dMon — which is exactly why RWO did not stop
+  # it. So TWO commonplace processes were open on ONE SQLite file
+  # (/var/lib/cwb/commonplace.db) concurrently: a corruption and lock-contention
+  # hazard, not merely a duplicate.
+  #
+  # This copy was also the BROKEN one. Its COMMONPLACE_EMBED_URL below points at
+  # 192.168.143.133:11434, a LAN address that no longer answers (ARP FAILED —
+  # another host that moved, same class as the robo-dog .124 -> .248 move that
+  # broke flannel). The cwb-core container uses 127.0.0.1:11434, the ollama
+  # `embed` sidecar in its own pod, which works. Embeddings were therefore dead
+  # on the copy that was actually serving traffic, and silently: nothing logs it.
+  #
+  # replicas MUST stay 0. Do not raise without deciding which copy owns the DB —
+  # both writing at once is the hazard this closes. The dead EMBED_URL below is
+  # left as-is deliberately: fix it before ever resurrecting this.
+  replicas: 0
   selector:
     matchLabels:
       app: commonplace
@@ -130,12 +150,28 @@ metadata:
   name: commonplace
   namespace: cwb
 spec:
+  # REPOINTED 2026-08-16 to the cwb-core pillar pod, alongside retiring the
+  # standalone Deployment above. Same pattern as porter-backup and
+  # interchange-gateway: the pillar moved into cwb-core and its Service was left
+  # selecting the old standalone label.
+  #
+  # This one differed from those two in that it was NOT endpoint-less — the
+  # standalone pod was still up, so the Service resolved fine and looked healthy
+  # while quietly serving the copy whose embed backend was dead.
+  #
+  # targetPort MUST be cmnpl-http: cwb-core names this port `cmnpl-http`, not
+  # `http` (port names are pod-local; the pillar pod disambiguates ten
+  # containers). Both listen on 8101.
+  #
+  # No data migration: both copies already mount the same commonplace-data PVC
+  # and the same /var/lib/cwb/commonplace.db, so this changes which process
+  # serves, not which data is served.
   ports:
   - name: http
     port: 8101
     protocol: TCP
-    targetPort: http
+    targetPort: cmnpl-http
   selector:
-    app: commonplace
+    app.cwb/commonplace: "true"
   type: ClusterIP
 
