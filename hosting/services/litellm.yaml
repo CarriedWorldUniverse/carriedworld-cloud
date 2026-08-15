@@ -89,16 +89,20 @@ data:
       # failing fast with "model not found". vision-review is offline until a
       # multimodal backend exists again; re-add a route when one does.
       #
-      # STILL DEAD, deliberately left in place pending an operator call:
-      # gemma-4-12b (same 30804 backend as vision was) and embeddings
-      # (100.92.111.3:30802, vllm-embeddinggemma, also 0 replicas — HTTP 000).
-      # Both fail the same way vision did. They are NOT dropped here because
-      # only vision was authorised, and `embeddings` may want repointing at the
-      # ollama `embed` container in cwb-core rather than deleting.
+      # `embeddings` DROPPED 2026-08-16 (operator): VESTIGIAL, not just dead.
+      # It pointed at vllm-embeddinggemma (100.92.111.3:30802, 0 replicas,
+      # HTTP 000), but commonplace — the only thing that ever used embeddings —
+      # does NOT go through this gateway at all. It talks to ollama directly:
+      # COMMONPLACE_EMBED_PROVIDER=ollama, nomic-embed-text, dim 768. In cwb-core
+      # that is the ollama `embed` sidecar over loopback (127.0.0.1:11434, which
+      # is why that container declares no ports). No consumer of this alias
+      # remains, so it is removed rather than repointed.
+      #
+      # STILL DEAD, left in place pending an operator call: gemma-4-12b, on the
+      # same 30804 backend vision used (0 replicas, HTTP 000). Only vision and
+      # embeddings were authorised for removal.
       - model_name: gemma-4-12b
         litellm_params: {model: openai/gemma-4-12b, api_base: "http://100.91.185.71:30804/v1", api_key: dummy}
-      - model_name: embeddings
-        litellm_params: {model: openai/embeddinggemma, api_base: "http://100.92.111.3:30802/v1", api_key: dummy}
       - model_name: qwen3.6
         litellm_params: {model: openai/inkling-small, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
     litellm_settings: {drop_params: true}
