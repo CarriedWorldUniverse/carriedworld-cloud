@@ -15,6 +15,19 @@ data:
   # would have deleted every kimi/glm/deepseek/vision/embedding route agora
   # depends on. Secrets remain os.environ/* references; no literal keys here.
   #
+  # 2026-08-16: the served model id is now "inkling-small", NOT
+  # "deepseek-v4-flash". robo-dog's ds4-server was switched to
+  # Inkling-Small-UD-IQ2_XXS.accretion.gguf (DS4_ARCH=inkling) and nothing
+  # updated this config, so all seven local aliases had been sending an unknown
+  # model name to a live server. It does NOT 404 — it HANGS (verified: no
+  # response in 20s; the same request with "inkling-small" returns 200), which
+  # is why the breakage was silent. Alias names are unchanged, as below.
+  #
+  # The id is derived from the model path, so it CHANGES whenever the loaded
+  # model changes. This line is the coupling: swapping the gguf on robo-dog
+  # without editing here breaks every local alias again, the same silent way.
+  # hosts/robo-dog/ds4-server.env carries the matching capture.
+  #
   # 2026-08-02 (operator decree): ds4-server on robo-dog (100.92.111.3:8000,
   # OpenAI-compatible, model id "deepseek-v4-flash") was promoted to GA. Every
   # LOCAL alias (code/general/control/ornith/ornith-judge/qwen3.6, plus the new
@@ -44,13 +57,13 @@ data:
   config.yaml: |
     model_list:
       - model_name: code
-        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
+        litellm_params: {model: openai/inkling-small, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
       - model_name: general
-        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
+        litellm_params: {model: openai/inkling-small, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
       - model_name: control
-        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
+        litellm_params: {model: openai/inkling-small, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
       - model_name: ds4-flash
-        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
+        litellm_params: {model: openai/inkling-small, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
       - model_name: glm-4.6
         litellm_params: {model: openai/glm-4.6, api_base: "https://api.z.ai/api/coding/paas/v4", api_key: os.environ/ZAI_API_KEY}
       - model_name: deepseek-v4-flash
@@ -66,17 +79,28 @@ data:
       - model_name: kimi-k3
         litellm_params: {model: openrouter/moonshotai/kimi-k3, api_key: os.environ/OPENROUTER_API_KEY}
       - model_name: ornith
-        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
+        litellm_params: {model: openai/inkling-small, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
       - model_name: ornith-judge
-        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
-      - model_name: vision
-        litellm_params: {model: openai/gemma-4-12b, api_base: "http://100.91.185.71:30804/v1", api_key: dummy}
+        litellm_params: {model: openai/inkling-small, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
+      # `vision` DROPPED 2026-08-16 (operator): there is no local multimodal
+      # backend any more. It pointed at 100.91.185.71:30804 (vllm-gemma4-vision-dmon),
+      # which is at 0 replicas and unreachable — verified HTTP 000. A route that
+      # cannot succeed is worse than an absent one: callers hang instead of
+      # failing fast with "model not found". vision-review is offline until a
+      # multimodal backend exists again; re-add a route when one does.
+      #
+      # STILL DEAD, deliberately left in place pending an operator call:
+      # gemma-4-12b (same 30804 backend as vision was) and embeddings
+      # (100.92.111.3:30802, vllm-embeddinggemma, also 0 replicas — HTTP 000).
+      # Both fail the same way vision did. They are NOT dropped here because
+      # only vision was authorised, and `embeddings` may want repointing at the
+      # ollama `embed` container in cwb-core rather than deleting.
       - model_name: gemma-4-12b
         litellm_params: {model: openai/gemma-4-12b, api_base: "http://100.91.185.71:30804/v1", api_key: dummy}
       - model_name: embeddings
         litellm_params: {model: openai/embeddinggemma, api_base: "http://100.92.111.3:30802/v1", api_key: dummy}
       - model_name: qwen3.6
-        litellm_params: {model: openai/deepseek-v4-flash, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
+        litellm_params: {model: openai/inkling-small, api_base: "http://100.92.111.3:8000/v1", api_key: dummy}
     litellm_settings: {drop_params: true}
 ---
 apiVersion: apps/v1
