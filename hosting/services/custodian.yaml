@@ -61,7 +61,13 @@ metadata:
   labels:
     app: custodian
 spec:
-  replicas: 1
+  # RETIRED 2026-08-16 (operator: cwb-core is current; the standalone
+  # pillars are what we moved away from). This copy was still running AND
+  # still selected by the Service, alongside the cwb-core `custodian` container
+  # on the SAME node (dMon). PVC custodian-data; both wrote <vol>/custodian.db.
+  # Two processes on one database is a corruption hazard, not just a
+  # duplicate — same failure commonplace had. replicas MUST stay 0.
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -145,9 +151,9 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: custodian
+    app.cwb/custodian: "true"
   ports:
     - name: grpc
       port: 8085
-      targetPort: grpc
+      targetPort: custodian-grpc   # cwb-core's port name; names are pod-local
       protocol: TCP

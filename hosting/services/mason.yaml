@@ -92,7 +92,13 @@ metadata:
   labels:
     app: mason
 spec:
-  replicas: 1
+  # RETIRED 2026-08-16 (operator: cwb-core is current; the standalone
+  # pillars are what we moved away from). This copy was still running AND
+  # still selected by the Service, alongside the cwb-core `mason` container
+  # on the SAME node (dMon). stateless (no volumes), so a duplicate rather than a dual-writer.
+  # Two processes on one database is a corruption hazard, not just a
+  # duplicate — same failure commonplace had. replicas MUST stay 0.
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -168,9 +174,9 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: mason
+    app.cwb/mason: "true"
   ports:
     - name: grpc
       port: 8086
-      targetPort: grpc
+      targetPort: mason-grpc   # cwb-core's port name; names are pod-local
       protocol: TCP

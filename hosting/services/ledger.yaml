@@ -45,7 +45,13 @@ metadata:
   name: ledger
   namespace: cwb
 spec:
-  replicas: 1
+  # RETIRED 2026-08-16 (operator: cwb-core is current; the standalone
+  # pillars are what we moved away from). This copy was still running AND
+  # still selected by the Service, alongside the cwb-core `ledger` container
+  # on the SAME node (dMon). PVC ledger-data; both wrote <vol>/ledger.db.
+  # Two processes on one database is a corruption hazard, not just a
+  # duplicate — same failure commonplace had. replicas MUST stay 0.
+  replicas: 0
   selector:
     matchLabels:
       app: ledger
@@ -128,8 +134,8 @@ spec:
   - name: http
     port: 8081
     protocol: TCP
-    targetPort: http
+    targetPort: ledger-http   # cwb-core's port name; names are pod-local
   selector:
-    app: ledger
+    app.cwb/ledger: "true"
   type: ClusterIP
 
