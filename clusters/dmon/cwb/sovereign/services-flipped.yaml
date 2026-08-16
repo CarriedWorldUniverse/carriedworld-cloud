@@ -1,22 +1,30 @@
 # Existing stable CWB services, CUT OVER to the sovereign (robo-dog) pods.
 # Their selectors now point at app=*-rd so the stable DNS names
-# (ledger.cwb.svc, herald.cwb.svc, cairn.cwb.svc, cairn-ssh) resolve to the
-# relocated deployments. Captured here to document the cutover state.
-apiVersion: v1
-kind: Service
-metadata:
-  name: ledger
-  namespace: cwb
-spec:
-  ports:
-  - name: http
-    port: 8081
-    protocol: TCP
-    targetPort: 8081
-  selector:
-    app: ledger-rd
-  type: ClusterIP
----
+# (herald.cwb.svc, cairn.cwb.svc, cairn-ssh) resolve to the relocated
+# deployments. Captured here to document the cutover state.
+#
+# `ledger` REMOVED from this file 2026-08-16. Its cutover never actually
+# happened, and this stale entry caused a reconcile ALERT LOOP once
+# clusters/dmon started being diffed per-file (#58): this file set
+# ledger -> app: ledger-rd, then hosting/services/ledger.yaml -- applied later
+# in the same run, since hosting/services/* comes after clusters/dmon in the
+# target order -- set it straight back to app: ledger. Live never changed, but
+# every cycle re-detected the drift and alerted. The other three entries do NOT
+# do this: hosting/services/cairn.yaml already carries app: cairn-rd, and
+# herald has no competing Service definition, so they agree with live.
+#
+# Removed rather than "fixed" by flipping ledger, because that would NOT be a
+# selector change -- it would be a DATA change. The two ledgers do not share
+# storage:
+#   ledger    (serving)  PVC       LEDGER_DB=/var/lib/nexus/ledger.db   on dMon
+#   ledger-rd            hostPath  LEDGER_DB=/var/lib/ledger/ledger.db  on robo-dog
+# Pointing the stable name at ledger-rd would silently switch every consumer to
+# a different database. ledger-rd already has its own Service with its own
+# endpoint, so it stays reachable by name meanwhile.
+#
+# If ledger IS meant to live on robo-dog, that is a migration (decide which DB
+# is authoritative, move the data, then update hosting/services/ledger.yaml --
+# the file that actually owns this Service) and not an edit to this one.
 apiVersion: v1
 kind: Service
 metadata:
