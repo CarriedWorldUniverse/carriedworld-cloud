@@ -59,7 +59,13 @@ metadata:
   labels:
     app: almanac
 spec:
-  replicas: 1
+  # RETIRED 2026-08-16 (operator: cwb-core is current; the standalone
+  # pillars are what we moved away from). This copy was still running AND
+  # still selected by the Service, alongside the cwb-core `almanac` container
+  # on the SAME node (dMon). PVC almanac-data; both wrote <vol>/almanac.db.
+  # Two processes on one database is a corruption hazard, not just a
+  # duplicate — same failure commonplace had. replicas MUST stay 0.
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -134,9 +140,9 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: almanac
+    app.cwb/almanac: "true"
   ports:
     - name: grpc
       port: 8083
-      targetPort: grpc
+      targetPort: almanac-grpc   # cwb-core's port name; names are pod-local
       protocol: TCP
