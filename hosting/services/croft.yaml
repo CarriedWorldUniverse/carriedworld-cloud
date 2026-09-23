@@ -8,7 +8,8 @@
 #
 # Shape (mirrors the cluster's existing patterns):
 #   * StatefulSet for stable identity + a sticky PVC (croft-home @ /home/operator).
-#   * Base image localhost/nexus-builder:dev (Debian bookworm: go/git/gh/node).
+#   * Base image localhost/nexus-runner:latest — the CI-built runner image
+#     (Debian bookworm: go/git/gh/node/claude/cairn), pre-loaded on the node.
 #     The startup script apt-installs openssh-server + mosh + claude-code on first
 #     boot (persisted nowhere needed — re-runs are cheap/idempotent) and provisions
 #     the `operator` user whose $HOME is the PVC.
@@ -151,7 +152,13 @@ spec:
         # 2. The workspace. Long-lived: startup script provisions sshd + the
         #    operator user + the operator token file, starts sshd, then tail -f.
         - name: croft
-          image: localhost/nexus-builder:dev
+          # The CI-built runner image (nexus runner-images.yml), distributed
+          # into dMon's containerd as localhost/nexus-runner:<cli-ver>/latest —
+          # same Dockerfile lineage as the hand-built nexus-builder:dev it
+          # replaces, but rebuilt weekly with the current claude-code, cairn and
+          # Go, so croft's tools stop drifting. Still PullNever: the tag has to
+          # be pre-loaded on the node (the distribute leg, or by hand).
+          image: localhost/nexus-runner:latest
           imagePullPolicy: Never
           command: ["/bin/bash", "/etc/croft/startup.sh"]
           lifecycle:
