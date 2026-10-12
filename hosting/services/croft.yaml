@@ -106,6 +106,12 @@ metadata:
 spec:
   serviceName: croft
   replicas: 1
+  # OnDelete: a template change (e.g. a new image) never restarts the live
+  # pod — croft is the operator's shell. It takes effect the next time the pod
+  # is RECREATED (kubectl delete pod croft-0); an in-place container restart
+  # keeps the running pod's own spec.
+  updateStrategy:
+    type: OnDelete
   selector:
     matchLabels:
       app: croft
