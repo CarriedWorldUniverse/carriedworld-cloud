@@ -369,6 +369,17 @@ data:
         && log "kasmVNC desktop up (:10, wss 8444)" || log "kasmVNC start failed (non-fatal)"
     fi
 
+    # --- T3 Code server: agent control surface, loopback only. The tailscale
+    #     sidecar's Serve maps https://croft.tail41686e.ts.net → :3773 (serve
+    #     config persists in its state dir on the PVC). Binary is PVC-native
+    #     (~/.t3 via t3.codes/install.sh); login shell so ~/.profile exports
+    #     CLAUDE_CODE_OAUTH_TOKEN. Restart loop; inert until installed, never
+    #     fails the boot.
+    if [ -x /home/operator/.local/bin/t3 ] && ! pgrep -f "t3 serve" >/dev/null 2>&1; then
+      su operator -s /bin/bash -c 'export HOME=/home/operator; mkdir -p ~/.t3/userdata/logs; setsid bash -lc "while :; do t3 serve --host 127.0.0.1 >>~/.t3/userdata/logs/croft-serve.log 2>&1; sleep 5; done" >/dev/null 2>&1 &' 2>/dev/null || true
+      log "t3 serve supervised (127.0.0.1:3773)"
+    fi
+
     # --- hold the pod open ---
     log "croft up — operator@croft.tail41686e.ts.net (ssh) ready; holding"
     exec tail -f /dev/null
