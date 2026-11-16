@@ -10,6 +10,11 @@ auto-syncs this directory to the host.
 
 ## ds4-server.service
 
+> **Status 2026-11-16: STOPPED and DISABLED** (operator: not currently needed;
+> robo-dog is freed for Kethril training). litellm in `model-stack` is scaled to
+> 0 with it. Restore both together: `sudo systemctl enable --now
+> ds4-server.service` here, and `replicas: 1` in `hosting/services/litellm.yaml`.
+
 The `ds4` (DwarfStar) model server, serving `deepseek-v4-flash` /
 `deepseek-v4-pro` on `:8000`. As of 2026-08-02, running the GA-0731 MXFP4
 streamed-cache config (`--ssd-streaming-cache-experts 75GB`, `--ctx 32768`)

@@ -82,7 +82,11 @@ intents:
     substrate:
       namespace: model-stack
       objects:
-        - { kind: Deployment, name: litellm }
+        - kind: Deployment
+          name: litellm
+          note: >-
+            scaled to 0 2026-11-16 (operator: not currently needed); its
+            backend, robo-dog's ds4-server, is stopped and disabled too
         - { kind: Deployment, name: ollama }
         - { kind: Deployment, name: vllm-gemma4-vision-dmon }
         - { kind: Deployment, name: vllm-ornith }
@@ -91,7 +95,8 @@ intents:
           name: vllm-gemma4-vision
           note: scaled to 0, superseded by vllm-gemma4-vision-dmon
         - { kind: Deployment, name: vllm-qwen36, note: scaled to 0 }
-    scaled_to_zero: false
+    # Every model-stack deployment is at 0 replicas as of 2026-11-16.
+    scaled_to_zero: true
 
   - id: broker
     title: Broker
