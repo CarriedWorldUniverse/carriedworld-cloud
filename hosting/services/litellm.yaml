@@ -114,7 +114,11 @@ metadata:
   namespace: model-stack
   labels: {app: litellm}
 spec:
-  replicas: 1
+  # 2026-11-16 (operator): not currently needed -- scaled to 0, together with
+  # robo-dog's ds4-server (stopped + disabled), to free the GB10 for Kethril
+  # training. Restore: replicas 1 here AND `sudo systemctl enable --now
+  # ds4-server.service` on robo-dog (every local alias routes to ds4).
+  replicas: 0
   strategy: {type: Recreate}   # single hostNetwork pod on :4000 — avoid rollout port-conflict deadlock
   selector:
     matchLabels: {app: litellm}
